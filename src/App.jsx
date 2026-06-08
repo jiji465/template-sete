@@ -889,6 +889,7 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
     );
 
     return (
+        <>
         <div className="max-w-[210mm] mx-auto print-wrapper">
             {/* ===== PÁGINA 1 ===== */}
             <div className="report-preview mb-8">
@@ -1136,6 +1137,11 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
                 </div>
             )}
         </div>
+        <div className="rpt-pfoot">
+            <span><b>{OFFICE_NAME}</b>{clientData.officeEmail ? ' · ' + clientData.officeEmail : ''}{clientData.officePhone ? ' · ' + clientData.officePhone : ''}</span>
+            <span>Competência {clientData.competenceShort || '—'}</span>
+        </div>
+        </>
     );
 };
 
