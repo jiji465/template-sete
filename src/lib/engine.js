@@ -130,16 +130,18 @@ export const getDueDate = (compMonth, compYear, taxName) => {
     return dia ? `${pad(dia)}/${pad(nextM)}/${nextY}` : '';
 };
 
-export const getBasePresumidaLP = (revenue, taxName, atividade, irpjCsllMode, equiparacao) => {
-    const presIRPJ = { 'Serviços': equiparacao ? 0.08 : 0.32, 'Comércio': 0.08, 'Indústria': 0.08 };
-    const presCSLL = { 'Serviços': equiparacao ? 0.12 : 0.32, 'Comércio': 0.12, 'Indústria': 0.12 };
+export const getBasePresumidaLP = (revenue, taxName, atividade, irpjCsllMode, equiparada) => {
+    const isServ = (atividade || 'Serviços') === 'Serviços';
+    const eq = isServ ? Math.min(Math.max(parseNumBR(equiparada) || 0, 0), revenue) : 0;
+    const norm = revenue - eq;
+    const baseIRPJ = isServ ? (eq * 0.08 + norm * 0.32) : (revenue * 0.08);
+    const baseCSLL = isServ ? (eq * 0.12 + norm * 0.32) : (revenue * 0.12);
     if (taxName === 'Adicional IRPJ') {
-        const baseCalculo = revenue * (presIRPJ[atividade] || 0.32);
         const limit = (irpjCsllMode === 'Trimestral (Apuração)') ? 60000 : 20000;
-        return Math.max(0, baseCalculo - limit); 
+        return Math.max(0, baseIRPJ - limit);
     }
-    if (taxName === 'IRPJ') return revenue * (presIRPJ[atividade] || 0.32);
-    if (taxName === 'CSLL') return revenue * (presCSLL[atividade] || 0.32);
+    if (taxName === 'IRPJ') return baseIRPJ;
+    if (taxName === 'CSLL') return baseCSLL;
     return revenue;
 };
 
@@ -237,7 +239,7 @@ export const autoFillTaxes = (data, currentTaxes) => {
                 const baseRevenueToUse = (data.irpjCsllMode === 'Trimestral (Apuração)' || data.irpjCsllMode === 'Estimativa (Anual)') && parseNumBR(data.periodRevenue) > 0 
                     ? parseNumBR(data.periodRevenue) 
                     : totalRevenue;
-                updated.base = baseRevenueToUse > 0 ? formatBRLDisplay(getBasePresumidaLP(baseRevenueToUse, t.tax, atividade, data.irpjCsllMode, data.equiparacaoHospitalar)) : "";
+                updated.base = baseRevenueToUse > 0 ? formatBRLDisplay(getBasePresumidaLP(baseRevenueToUse, t.tax, atividade, data.irpjCsllMode, data.equiparacaoHospitalar ? data.receitaEquiparacao : 0)) : "";
             } else if (baseFolha.includes(t.tax)) {
                 const totalFolhaEProLabore = proLabore + folhaMensal;
                 updated.base = totalFolhaEProLabore > 0 ? formatBRLDisplay(totalFolhaEProLabore) : "";

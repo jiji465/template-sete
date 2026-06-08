@@ -226,6 +226,7 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
         clientData.atividade,
         clientData.regime,
         clientData.equiparacaoHospitalar,
+        clientData.receitaEquiparacao,
         clientData.irpjCsllMode
     ]);
 
@@ -538,9 +539,17 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
                                         <input type="checkbox" className="w-4 h-4 mt-0.5 accent-emerald-600" checked={!!clientData.equiparacaoHospitalar}
                                             onChange={e => updateClient('equiparacaoHospitalar', e.target.checked)} />
                                         <span className="text-xs font-bold text-navy leading-relaxed">Equiparação hospitalar
-                                            <span className="font-medium text-slate-500"> — aplica presunção reduzida (IRPJ 8% · CSLL 12%) no lugar dos 32% de serviços. Use para serviços de saúde que atendam aos requisitos legais (Lei 9.249/95).</span>
+                                            <span className="font-medium text-slate-500"> — aplica presunção reduzida (IRPJ 8% · CSLL 12%) na parte da receita que se enquadra. Use para serviços de saúde que atendam aos requisitos legais (Lei 9.249/95).</span>
                                         </span>
                                     </label>
+                                )}
+                                {(clientData.atividade || 'Serviços') === 'Serviços' && clientData.equiparacaoHospitalar && (
+                                    <div className="col-span-2 animate-fade-in">
+                                        <label className="field-label">Receita COM equiparação hospitalar (R$) — presunção 8% / 12%</label>
+                                        <input className="field-input border-emerald-200 focus:border-emerald-500" type="text" value={clientData.receitaEquiparacao || ''}
+                                            onChange={e => updateClient('receitaEquiparacao', parseBRL(e.target.value))} placeholder="0,00" />
+                                        <p className="text-[10px] text-slate-500 mt-1">Apenas esta parcela usa 8%/12%. O restante da receita é tributado na presunção padrão de 32%.</p>
+                                    </div>
                                 )}
                             </div>
                         </div>
@@ -741,19 +750,23 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
     } else if ((clientData.regime === 'Lucro Presumido' || clientData.regime === 'Lucro Real') && clientData.equiparacaoHospitalar && (clientData.atividade || 'Serviços') === 'Serviços') {
         const periodMode = clientData.irpjCsllMode === 'Trimestral (Apuração)' || clientData.irpjCsllMode === 'Estimativa (Anual)';
         const baseRev = periodMode && parseNum(clientData.periodRevenue) > 0 ? parseNum(clientData.periodRevenue) : revenue;
+        const eqRev = Math.min(Math.max(parseNum(clientData.receitaEquiparacao), 0), baseRev);
+        const normRev = baseRev - eqRev;
         const adicLimit = clientData.irpjCsllMode === 'Trimestral (Apuração)' ? 60000 : 20000;
-        const semVal = (baseRev * 0.32 * 0.15) + (baseRev * 0.32 * 0.09) + (Math.max(0, baseRev * 0.32 - adicLimit) * 0.10);
-        const comVal = (baseRev * 0.08 * 0.15) + (baseRev * 0.12 * 0.09) + (Math.max(0, baseRev * 0.08 - adicLimit) * 0.10);
-        if (semVal - comVal > 0) {
+        const baseIrpjSem = baseRev * 0.32, baseCsllSem = baseRev * 0.32;
+        const semVal = (baseIrpjSem * 0.15) + (baseCsllSem * 0.09) + (Math.max(0, baseIrpjSem - adicLimit) * 0.10);
+        const baseIrpjCom = eqRev * 0.08 + normRev * 0.32, baseCsllCom = eqRev * 0.12 + normRev * 0.32;
+        const comVal = (baseIrpjCom * 0.15) + (baseCsllCom * 0.09) + (Math.max(0, baseIrpjCom - adicLimit) * 0.10);
+        if (eqRev > 0 && semVal - comVal > 0) {
             economia = {
                 tipo: 'Equiparação Hospitalar',
                 valor: semVal - comVal,
-                semLabel: 'Sem equiparação · presunção 32%',
-                comLabel: 'Com equiparação · 8% / 12%',
+                semLabel: 'Sem equiparação · tudo a 32%',
+                comLabel: 'Com equiparação · parcial',
                 semVal, comVal,
-                semExtra: 'IRPJ e CSLL sobre 32% da receita',
-                comExtra: 'IRPJ sobre 8% · CSLL sobre 12%',
-                explica: `Os serviços hospitalares qualificados usam presunção reduzida — 8% para IRPJ e 12% para CSLL — no lugar dos 32% padrão de serviços, diminuindo a base de cálculo do IRPJ e da CSLL no Lucro Presumido.`,
+                semExtra: `IRPJ e CSLL sobre 32% de ${formatCurrency(baseRev)}`,
+                comExtra: `${formatCurrency(eqRev)} a 8%/12% + ${formatCurrency(normRev)} a 32%`,
+                explica: `Apenas ${formatCurrency(eqRev)} da receita se enquadra na equiparação (presunção 8% IRPJ / 12% CSLL); o restante (${formatCurrency(normRev)}) segue a 32%. A economia é a diferença na base de IRPJ e CSLL sobre a parcela equiparada.`,
             };
         }
     }
