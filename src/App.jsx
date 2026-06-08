@@ -333,7 +333,7 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
                     <div>
                         <label className="field-label">Competência <span className="text-red-400">*</span></label>
                         <div className="flex gap-2">
-                            <select className={`field-input flex-1 ${validationErrors.competence ? 'field-error' : ''}`} value={clientData.compMonth || ''}
+                            <select className={`field-input flex-1 ${validationErrors.competence ? 'field-error' : ''}`} value={clientData.compMonth || (clientData.competenceShort ? String(parseInt(clientData.competenceShort.split('/')[0], 10)) : '')}
                                 onChange={e => {
                                     const m = e.target.value; updateClient('compMonth', m);
                                     const y = clientData.compYear || new Date().getFullYear().toString();
@@ -346,7 +346,7 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
                                 <option value="">Mês</option>
                                 {MONTHS.map((name, i) => <option key={i} value={String(i + 1)}>{name}</option>)}
                             </select>
-                            <select className="field-input w-28" value={clientData.compYear || ''}
+                            <select className="field-input w-28" value={clientData.compYear || (clientData.competenceShort ? clientData.competenceShort.split('/')[1] : '')}
                                 onChange={e => {
                                     const y = e.target.value; updateClient('compYear', y);
                                     const m = clientData.compMonth;
@@ -556,7 +556,17 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
                     )}
 
                     {showFatorR && <FatorRDashboard clientData={clientData} isPrint={false} />}
-                    
+
+                    {showFatorR && (
+                        <label className="col-span-2 flex items-start gap-2 cursor-pointer select-none bg-white p-3 rounded-lg border border-emerald-200">
+                            <input type="checkbox" className="w-4 h-4 mt-0.5 accent-emerald-600" checked={!!clientData.mostrarEconomiaFatorR}
+                                onChange={e => updateClient('mostrarEconomiaFatorR', e.target.checked)} />
+                            <span className="text-xs font-bold text-navy leading-relaxed">Mostrar economia do Fator R no relatório
+                                <span className="font-medium text-slate-500"> — exibe o comparativo Anexo III × Anexo V como "economia gerada". Marque só quando a atividade realmente depende do Fator R, e não para atividades que já são Anexo III por natureza (ex.: certos serviços de saúde).</span>
+                            </span>
+                        </label>
+                    )}
+
                     {parseNumBR(clientData.rbt12) > 0 && clientData.anexo && !showFatorR && clientData.regime === 'Simples Nacional' && (
                         (() => {
                             const rbt12 = parseNumBR(clientData.rbt12);
@@ -730,7 +740,7 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
 
     // ===== Economia inteligente: Fator R (Simples) e Equiparação Hospitalar (Lucro Presumido) =====
     let economia = null;
-    if (clientData.regime === 'Simples Nacional' && (clientData.anexo === 'Anexo III' || clientData.anexo === 'Anexo V') && rbt12 > 0 && fR >= 28) {
+    if (clientData.mostrarEconomiaFatorR && clientData.regime === 'Simples Nacional' && (clientData.anexo === 'Anexo III' || clientData.anexo === 'Anexo V') && rbt12 > 0 && fR >= 28) {
         const rateIII = calcAliquotaEfetivaSN(rbt12, 'Anexo III').rate;
         const rateV = calcAliquotaEfetivaSN(rbt12, 'Anexo V').rate;
         const taxIII = revenue * rateIII / 100;
@@ -888,7 +898,7 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
         ? { cls: 'w', label: 'Alíquota efetiva', value: formatPercent(aliquotaEfetiva), foot: 'carga sobre a receita' }
         : { cls: 'w', label: 'Após tributos', value: fmtKpi(liquido), foot: 'faturamento − impostos' };
 
-    function fmtKpi(v) { return 'R$ ' + Math.round(parseNum(v)).toLocaleString('pt-BR'); }
+    function fmtKpi(v) { return formatCurrency(v); }
 
     const kpiStyle = (cls) => cls === 'navy' ? { background: '#001D3D', color: '#fff', boxShadow: '0 1px 2px rgba(0,29,61,.08), 0 4px 12px rgba(0,29,61,.10)' }
         : cls === 'gold' ? { background: 'linear-gradient(160deg,#F79C04,#d4830a)', color: '#fff', boxShadow: '0 1px 2px rgba(176,111,6,.12), 0 4px 12px rgba(176,111,6,.14)' }
