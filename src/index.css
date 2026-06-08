@@ -15,12 +15,12 @@
         @media print {
             @page { size: A4 portrait; margin: 0; }
             *, *::before, *::after { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-            html, body { width: 100% !important; margin: 0 !important; padding: 0 !important; background: white !important; font-size: 11px !important; line-height: 1.45 !important; overflow: visible !important; }
+            html, body { width: 100% !important; margin: 0 !important; padding: 0 !important; background: #e8ebf1 !important; font-size: 11px !important; line-height: 1.45 !important; overflow: visible !important; }
             .no-print { display: none !important; }
             .print-only { display: block !important; }
-            .print-wrapper { width: 100% !important; max-width: 100% !important; padding: 0 !important; margin: 0 !important; display: flex !important; flex-direction: column !important; }
-            .report-preview { box-sizing: border-box !important; width: auto !important; max-width: none !important; min-height: 273mm !important; height: auto !important; padding: 9mm !important; margin: 12mm !important; box-shadow: none !important; border-radius: 14px !important; background: #e8ebf1 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; display: flex !important; flex-direction: column !important; overflow: visible !important; page-break-after: always !important; break-after: page !important; }
-            .report-preview:last-of-type { page-break-after: avoid !important; break-after: avoid !important; }
+            .print-wrapper { width: 100% !important; max-width: 100% !important; padding: 0 !important; margin: 0 !important; }
+            .report-preview { box-sizing: border-box !important; width: auto !important; max-width: none !important; min-height: 270mm !important; height: auto !important; padding: 11mm !important; margin: 0 !important; box-shadow: none !important; border-radius: 0 !important; background: #e8ebf1 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; display: flex !important; flex-direction: column !important; overflow: visible !important; page-break-after: always !important; }
+            .report-preview:last-of-type { page-break-after: avoid !important; }
             .report-preview .mb-8 { margin-bottom: 0 !important; }
             .report-preview-body { flex: 1 !important; }
             .page-footer { margin-top: auto !important; padding-top: 8px !important; flex-shrink: 0 !important; }
