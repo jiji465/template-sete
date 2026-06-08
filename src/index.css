@@ -4,7 +4,6 @@
 
 @font-face{font-family:'Wildest';src:url('./assets/Wildest.otf') format('opentype');font-weight:400;font-style:normal;font-display:swap;}
         body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-        .rpt-pfoot { display: none; }
         
         /* SCREEN */
         @media screen {
@@ -20,13 +19,11 @@
             .no-print { display: none !important; }
             .print-only { display: block !important; }
             .print-wrapper { width: 100% !important; max-width: 100% !important; padding: 0 !important; margin: 0 !important; }
-            .report-preview { box-sizing: border-box !important; width: auto !important; max-width: none !important; min-height: 262mm !important; height: auto !important; padding: 11mm !important; margin: 0 !important; box-shadow: none !important; border-radius: 0 !important; background: #e8ebf1 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; display: flex !important; flex-direction: column !important; overflow: visible !important; page-break-after: always !important; }
+            .report-preview { box-sizing: border-box !important; width: auto !important; max-width: none !important; min-height: calc(100vh - 8mm) !important; height: auto !important; padding: 11mm !important; margin: 0 !important; box-shadow: none !important; border-radius: 0 !important; background: #e8ebf1 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; display: flex !important; flex-direction: column !important; overflow: visible !important; page-break-after: always !important; }
             .report-preview:last-of-type { page-break-after: avoid !important; }
             .report-preview .mb-8 { margin-bottom: 0 !important; }
             .report-preview-body { flex: 1 !important; }
-            .page-footer { display: none !important; }
-            .rpt-pfoot { display: flex !important; position: fixed !important; bottom: 9mm !important; left: 11mm !important; right: 11mm !important; justify-content: space-between !important; align-items: center !important; font-size: 9px !important; color: #646d7c !important; border-top: 2px solid #001D3D !important; padding-top: 6px !important; background: #e8ebf1 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-            .rpt-pfoot b { color: #1a2230 !important; }
+            .page-footer { margin-top: auto !important; padding-top: 8px !important; flex-shrink: 0 !important; }
             .print-grid-2 { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 10px !important; }
             .shadow-xl, .shadow-2xl, .shadow-lg, .shadow-md, .shadow-sm { box-shadow: none !important; }
             .avoid-break { break-inside: avoid !important; page-break-inside: avoid !important; }
