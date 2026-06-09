@@ -356,9 +356,24 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
                                     }
                                 }}>
                                 <option value="">Ano</option>
-                                {[2024, 2025, 2026, 2027, 2028].map(y => <option key={y} value={String(y)}>{y}</option>)}
+                                {[2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030].map(y => <option key={y} value={String(y)}>{y}</option>)}
                             </select>
                         </div>
+                        <input className="field-input mt-2 !text-xs" type="text" placeholder="ou digite manualmente: mm/aaaa (ex.: 05/2026)"
+                            value={clientData.competenceShort || ''}
+                            onChange={e => {
+                                const v = e.target.value.replace(/[^\d/]/g, '');
+                                updateClient('competenceShort', v);
+                                const mt = v.match(/^(\d{1,2})\/(\d{4})$/);
+                                if (mt) {
+                                    const mm = String(parseInt(mt[1], 10)), yy = mt[2];
+                                    updateClient('compMonth', mm);
+                                    updateClient('compYear', yy);
+                                    updateClient('competence', (MONTHS[parseInt(mm) - 1] || '') + '/' + yy);
+                                    updateClient('competenceShort', mm.padStart(2, '0') + '/' + yy);
+                                    setValidationErrors(prev => ({ ...prev, competence: undefined }));
+                                }
+                            }} />
                         {validationErrors.competence && <p className="field-error-msg">{validationErrors.competence}</p>}
                     </div>
                     <div>
@@ -828,6 +843,14 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
     if (clientData.regime === 'Simples Nacional') gloss.push({ acronym: 'Anexo / Faixa', full: 'Tabela e faixa do Simples', desc: 'Definem a alíquota aplicada conforme a atividade e o faturamento acumulado dos últimos 12 meses (RBT12).' });
     gloss.push({ acronym: 'Carga tributária', full: 'Percentual sobre o faturamento', desc: 'Quanto o total de tributos do período representa sobre o faturamento.' });
     gloss.push({ acronym: 'Competência', full: 'Mês de referência', desc: 'Período a que se referem as operações e os tributos apurados neste relatório.' });
+    // Glossário inteligente: qualquer tributo apurado (valor > 0) não coberto pelo glossário padrão ganha entrada automática
+    const coveredNames = new Set();
+    GLOSSARY.forEach(g => g.matchTaxes.forEach(mt => coveredNames.add(mt)));
+    taxes.filter(t => t.tax && parseNum(t.value) > 0).forEach(t => {
+        if (!coveredNames.has(t.tax) && !gloss.some(g => g.acronym.toLowerCase() === t.tax.toLowerCase())) {
+            gloss.push({ acronym: t.tax, full: 'Tributo apurado', desc: (t.obs && t.obs.trim()) ? t.obs : `Tributo informado na apuração da competência${t.rate && parseNum(t.rate) > 0 ? ' · alíquota ' + String(t.rate).replace('.', ',') + '%' : ''}.` });
+        }
+    });
     const seenGloss = new Set();
     gloss = gloss.filter(g => { const k = g.acronym.toLowerCase(); if (seenGloss.has(k)) return false; seenGloss.add(k); return true; });
 
