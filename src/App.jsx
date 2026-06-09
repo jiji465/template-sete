@@ -1127,7 +1127,7 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
                             const flat = Object.values(mo.days).reduce((a, b) => a.concat(b), []);
                             const mTotal = flat.reduce((s, t) => s + parseNum(t.value), 0);
                             return (
-                                <div className={card + ' mb-4 avoid-break'} style={cardPad} key={mi}>
+                                <div className={card + ' mb-4'} style={cardPad} key={mi}>
                                     <SectionTitle right={`${MESES[mo.month - 1]}/${mo.year} · ${flat.length} guia${flat.length > 1 ? 's' : ''}`}>Calendário de vencimentos</SectionTitle>
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 5, marginBottom: 5 }}>
                                         {WD.map((w, i) => <div key={i} style={{ textAlign: 'center', fontSize: '9px', fontWeight: 700, letterSpacing: '.5px', textTransform: 'uppercase', color: '#9aa2af' }}>{w}</div>)}
@@ -1136,12 +1136,12 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
                                         {cells.map((d, i) => {
                                             if (d === null) return <div key={i}></div>;
                                             const items = mo.days[d];
-                                            if (!items) return <div key={i} style={{ minHeight: 62, border: '1px solid #eef0f3', borderRadius: 8, padding: '5px 6px', background: '#fafbfc' }}><span style={{ fontSize: '11px', fontWeight: 700, color: '#9aa2af' }}>{d}</span></div>;
+                                            if (!items) return <div key={i} style={{ minHeight: 52, border: '1px solid #eef0f3', borderRadius: 8, padding: '5px 6px', background: '#fafbfc' }}><span style={{ fontSize: '11px', fontWeight: 700, color: '#9aa2af' }}>{d}</span></div>;
                                             const sub = items.reduce((s, t) => s + parseNum(t.value), 0);
                                             const due = new Date(mo.year, mo.month - 1, d); const diff = Math.ceil((due - hoje) / 86400000);
                                             const alert = diff <= 5;
                                             return (
-                                                <div key={i} className="avoid-break" style={{ minHeight: 64, border: '1px solid ' + (alert ? '#f3d6cb' : '#e2e8f0'), borderRadius: 8, padding: '5px 6px', background: alert ? '#fcf1ec' : '#fff', display: 'flex', flexDirection: 'column' }}>
+                                                <div key={i} className="avoid-break" style={{ minHeight: 52, border: '1px solid ' + (alert ? '#f3d6cb' : '#e2e8f0'), borderRadius: 8, padding: '5px 6px', background: alert ? '#fcf1ec' : '#fff', display: 'flex', flexDirection: 'column' }}>
                                                     <span style={{ fontSize: '11px', fontWeight: 700, color: '#1a2230' }}>{d}</span>
                                                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 4 }}>
                                                         {items.map((t, j) => { const isDas = /^DAS/.test(t.tax); return <span key={j} style={{ fontSize: '7.5px', fontWeight: 700, padding: '1px 5px', borderRadius: 20, background: isDas ? '#fcefd7' : '#e7ecf3', color: isDas ? '#b06f06' : '#0a3160' }}>{t.tax}</span>; })}
