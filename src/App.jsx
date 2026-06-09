@@ -761,7 +761,7 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
     const totalTributos = taxes.reduce((s, r) => s + parseNum(r.value), 0);
     const totalApurado = taxes.reduce((s, r) => s + (parseNum(r.apurado) || parseNum(r.value)), 0);
     const totalRetido = taxes.reduce((s, r) => s + parseNum(r.retido), 0);
-    const aliquotaEfetiva = revenue > 0 ? (totalTributos / revenue) * 100 : 0;
+    const aliquotaEfetiva = revenue > 0 ? (totalApurado / revenue) * 100 : 0;
 
     const rbt12 = parseNum(clientData.rbt12);
     const folha12m = parseNum(clientData.folha12m !== undefined ? clientData.folha12m : clientData.folha);
@@ -770,7 +770,7 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
 
     const hasRetentions = parseNum(clientData.revenueRetained) > 0 || taxes.some(t => parseNum(t.retido) > 0 || t.retidoManual);
     const isSN = clientData.regime === 'Simples Nacional' || clientData.regime === 'MEI';
-    const liquido = revenue - totalTributos;
+    const liquido = revenue - totalApurado;
     const compLabel = clientData.competence || clientData.competenceShort || '—';
 
     // Função que totaliza uma lista de tributos
@@ -926,7 +926,7 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
     );
 
     const SectionTitle = ({ children, right }) => (
-        <div className="flex items-center gap-2 mb-3" style={{ textTransform: 'uppercase', letterSpacing: '1.5px', fontSize: '10px', color: '#b06f06', fontWeight: 700 }}>
+        <div className="flex items-center gap-2 mb-3 sec-ttl" style={{ textTransform: 'uppercase', letterSpacing: '1.5px', fontSize: '10px', color: '#b06f06', fontWeight: 700 }}>
             <span style={{ width: 14, height: 2, background: '#F79C04', display: 'inline-block' }}></span>
             <span>{children}</span>
             {right && <span className="ml-auto" style={{ color: '#9aa2af', fontWeight: 500, letterSpacing: '.3px', textTransform: 'none', fontSize: '9.5px' }}>{right}</span>}
@@ -980,10 +980,17 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
 
                     <div className="grid grid-cols-4 gap-3 mb-4 avoid-break">
                         <KpiCard cls="navy" label="Faturamento" value={fmtKpi(revenue)} foot="Receita bruta do mês" />
-                        <KpiCard cls="w" label="Total a pagar" value={fmtKpi(totalTributos)} foot={`${formatPercent(aliquotaEfetiva)} do faturamento`} />
+                        <KpiCard cls="w" label="Total a pagar" value={fmtKpi(totalTributos)} foot={hasRetentions ? 'líquido após retenção' : `${formatPercent(aliquotaEfetiva)} do faturamento`} />
                         <KpiCard cls={kpi3.cls} label={kpi3.label} value={kpi3.value} foot={kpi3.foot} />
                         <KpiCard cls={kpi4.cls} label={kpi4.label} value={kpi4.value} foot={kpi4.foot} />
                     </div>
+
+                    {(clientData.irpjCsllMode === 'Trimestral (Apuração)' || clientData.irpjCsllMode === 'Estimativa (Anual)') && parseNum(clientData.periodRevenue) > 0 && (
+                        <div className="avoid-break flex items-center gap-2" style={{ fontSize: '10px', color: '#646d7c', margin: '-2px 2px 12px' }}>
+                            <span style={{ width: 14, height: 2, background: '#F79C04', display: 'inline-block', flexShrink: 0 }}></span>
+                            <span>IRPJ e CSLL apurados sobre o <b style={{ color: '#1a2230' }}>faturamento acumulado do período: {formatCurrency(clientData.periodRevenue)}</b> · {clientData.irpjCsllMode}</span>
+                        </div>
+                    )}
 
                     {!hasRetentions ? (
                         <div className="grid grid-cols-2 gap-3 mb-4 avoid-break">
@@ -1028,7 +1035,7 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
                                     </tbody>
                                 </table>
                             </div>
-                            <div className={card + ' mb-4 avoid-break'} style={cardPad}>
+                            <div className={card + ' mb-4'} style={cardPad}>
                                 <SectionTitle right={`${taxRows.length} tributos · retenção abatida`}>Impostos apurados</SectionTitle>
                                 <table className="w-full" style={{ fontSize: '11px', borderCollapse: 'collapse' }}>
                                     <thead>
@@ -1099,39 +1106,62 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
                         );
                     })()}
 
-                    {withDue.length > 0 && (
-                        <div className={card + ' mb-4 avoid-break'} style={cardPad}>
-                            <SectionTitle right={`${withDue.length} guia${withDue.length > 1 ? 's' : ''}`}>Vencimentos</SectionTitle>
-                            <div className="grid grid-cols-2 gap-2">
-                                {withDue.map((t, i) => {
-                                    const p = t.dueDate.split('/');
-                                    const st = dueStatus(t.dueDate);
-                                    return (
-                                        <div key={i} className="flex items-center gap-3" style={{ padding: '9px 11px', borderRadius: 10, background: st.soon ? '#f7e7e2' : '#f7f8fa' }}>
-                                            <div style={{ textAlign: 'center', width: 34, flexShrink: 0 }}>
-                                                <div style={{ fontWeight: 800, fontSize: '17px', lineHeight: 1, color: '#1a2230' }}>{p[0]}</div>
-                                                <div style={{ textTransform: 'uppercase', fontSize: '7.5px', letterSpacing: '1px', color: '#646d7c', fontWeight: 700 }}>{MES_ABBR[(+p[1] || 1) - 1]}</div>
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <div style={{ fontSize: '11px', fontWeight: 600 }}>{t.tax} — {compLabel}</div>
-                                                <div style={{ fontSize: '9px', color: '#646d7c', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{guiaSub(t)}</div>
-                                            </div>
-                                            <div className="text-right">
-                                                <div style={{ fontSize: '12px', fontWeight: 700 }}>{formatCurrency(parseNum(t.value))}</div>
-                                                <div style={{ textTransform: 'uppercase', fontSize: '7.5px', letterSpacing: '.5px', fontWeight: 700, color: st.ok ? '#1f7a4d' : '#b5402b' }}>{st.t}</div>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                            <div className="flex items-center justify-between" style={{ marginTop: 11, paddingTop: 10, borderTop: '2px solid #001D3D' }}>
-                                <span style={{ fontSize: '10.5px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.5px', color: '#646d7c' }}>Total a recolher</span>
-                                <span style={{ fontSize: '15px', fontWeight: 800, color: '#001D3D', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(totalDue)}</span>
-                            </div>
-                        </div>
-                    )}
+                    {withDue.length > 0 && (() => {
+                        const WD = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+                        const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+                        const byMonth = {};
+                        withDue.forEach(t => {
+                            const pp = t.dueDate.split('/'); const d = +pp[0], m = +pp[1], y = +pp[2];
+                            const k = y + '-' + m;
+                            if (!byMonth[k]) byMonth[k] = { year: y, month: m, days: {} };
+                            (byMonth[k].days[d] = byMonth[k].days[d] || []).push(t);
+                        });
+                        const months = Object.values(byMonth).sort((a, b) => (a.year - b.year) || (a.month - b.month));
+                        const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+                        return months.map((mo, mi) => {
+                            const first = new Date(mo.year, mo.month - 1, 1).getDay();
+                            const ndays = new Date(mo.year, mo.month, 0).getDate();
+                            const cells = [];
+                            for (let i = 0; i < first; i++) cells.push(null);
+                            for (let d = 1; d <= ndays; d++) cells.push(d);
+                            const flat = Object.values(mo.days).reduce((a, b) => a.concat(b), []);
+                            const mTotal = flat.reduce((s, t) => s + parseNum(t.value), 0);
+                            return (
+                                <div className={card + ' mb-4 avoid-break'} style={cardPad} key={mi}>
+                                    <SectionTitle right={`${MESES[mo.month - 1]}/${mo.year} · ${flat.length} guia${flat.length > 1 ? 's' : ''}`}>Calendário de vencimentos</SectionTitle>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 5, marginBottom: 5 }}>
+                                        {WD.map((w, i) => <div key={i} style={{ textAlign: 'center', fontSize: '9px', fontWeight: 700, letterSpacing: '.5px', textTransform: 'uppercase', color: '#9aa2af' }}>{w}</div>)}
+                                    </div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 5 }}>
+                                        {cells.map((d, i) => {
+                                            if (d === null) return <div key={i}></div>;
+                                            const items = mo.days[d];
+                                            if (!items) return <div key={i} style={{ minHeight: 62, border: '1px solid #eef0f3', borderRadius: 8, padding: '5px 6px', background: '#fafbfc' }}><span style={{ fontSize: '11px', fontWeight: 700, color: '#9aa2af' }}>{d}</span></div>;
+                                            const sub = items.reduce((s, t) => s + parseNum(t.value), 0);
+                                            const due = new Date(mo.year, mo.month - 1, d); const diff = Math.ceil((due - hoje) / 86400000);
+                                            const alert = diff <= 5;
+                                            return (
+                                                <div key={i} className="avoid-break" style={{ minHeight: 64, border: '1px solid ' + (alert ? '#f3d6cb' : '#e2e8f0'), borderRadius: 8, padding: '5px 6px', background: alert ? '#fcf1ec' : '#fff', display: 'flex', flexDirection: 'column' }}>
+                                                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#1a2230' }}>{d}</span>
+                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 4 }}>
+                                                        {items.map((t, j) => { const isDas = /^DAS/.test(t.tax); return <span key={j} style={{ fontSize: '7.5px', fontWeight: 700, padding: '1px 5px', borderRadius: 20, background: isDas ? '#fcefd7' : '#e7ecf3', color: isDas ? '#b06f06' : '#0a3160' }}>{t.tax}</span>; })}
+                                                    </div>
+                                                    <span style={{ marginTop: 'auto', textAlign: 'right', paddingTop: 3, fontSize: '9px', fontWeight: 800, color: alert ? '#b5402b' : '#001D3D', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(sub)}</span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                    <div className="flex items-center" style={{ gap: 16, marginTop: 14, paddingTop: 11, borderTop: '2px solid #001D3D' }}>
+                                        <span className="flex items-center" style={{ gap: 6, fontSize: '10px', color: '#646d7c' }}><i style={{ width: 10, height: 10, borderRadius: 3, background: '#fcf1ec', border: '1px solid #f3d6cb', display: 'inline-block' }}></i> Vence em ≤5 dias</span>
+                                        <span className="flex items-center" style={{ gap: 6, fontSize: '10px', color: '#646d7c' }}><i style={{ width: 10, height: 10, borderRadius: 3, background: '#fff', border: '1px solid #e2e8f0', display: 'inline-block' }}></i> A vencer</span>
+                                        <span style={{ marginLeft: 'auto', fontSize: '11px', color: '#646d7c', fontWeight: 600 }}>Total a recolher <b style={{ fontSize: '15px', color: '#001D3D', fontWeight: 800, marginLeft: 6 }}>{formatCurrency(mTotal)}</b></span>
+                                    </div>
+                                </div>
+                            );
+                        });
+                    })()}
                 </div>
-                <Footer pageLabel={`Página 1 de ${totalPages}`} />
+                {!hasPage2 && <Footer />}
             </div>
 
             {/* ===== PÁGINA 2 ===== */}
@@ -1169,11 +1199,11 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
                         )}
 
                         {gloss.length > 0 && (
-                            <div className={card + ' mb-4 avoid-break'} style={cardPad}>
+                            <div className={card + ' mb-4'} style={cardPad}>
                                 <SectionTitle right="termos do seu relatório">Glossário inteligente</SectionTitle>
                                 <div className="grid grid-cols-2" style={{ gap: '10px 26px' }}>
                                     {gloss.map((item, i) => (
-                                        <div key={i} style={{ paddingBottom: 9, borderBottom: '1px solid #e9e6dd' }}>
+                                        <div key={i} className="avoid-break" style={{ paddingBottom: 9, borderBottom: '1px solid #e9e6dd' }}>
                                             <div style={{ fontSize: '11px', fontWeight: 700, color: '#001D3D' }}>
                                                 <span style={{ color: '#b06f06', fontWeight: 700, marginRight: 5 }}>{item.acronym}</span>{item.full}
                                             </div>
@@ -1201,7 +1231,7 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
                             </ul>
                         </div>
                     </div>
-                    <Footer pageLabel={`Página ${totalPages} de ${totalPages}`} />
+                    <Footer />
                 </div>
             )}
         </div>
@@ -1331,7 +1361,17 @@ const App = () => {
         setTab('preview');
         setTimeout(() => {
             setLoading(false);
+            const empresa = (clientData.clientName || '').trim();
+            const mes = (clientData.competence || clientData.competenceShort || '').trim();
+            const oldTitle = document.title;
+            if (empresa) {
+                document.title = `Apuração Fiscal ${mes}${mes ? ' - ' : ''}${empresa}`
+                    .replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim();
+            }
+            const restore = () => { document.title = oldTitle; window.removeEventListener('afterprint', restore); };
+            window.addEventListener('afterprint', restore);
             window.print();
+            setTimeout(restore, 2000);
         }, 600);
     };
 
