@@ -19,11 +19,12 @@
             .no-print { display: none !important; }
             .print-only { display: block !important; }
             .print-wrapper { width: 100% !important; max-width: 100% !important; padding: 0 !important; margin: 0 !important; }
-            .report-preview { box-sizing: border-box !important; width: auto !important; max-width: none !important; height: auto !important; padding: 11mm 11mm 0 11mm !important; margin: 0 !important; box-shadow: none !important; border-radius: 0 !important; background: #e8ebf1 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; display: block !important; overflow: visible !important; }
+            .report-preview { box-sizing: border-box !important; width: auto !important; max-width: none !important; height: auto !important; min-height: 296mm !important; padding: 11mm 11mm 0 11mm !important; margin: 0 !important; box-shadow: none !important; border-radius: 0 !important; background: #e8ebf1 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; display: flex !important; flex-direction: column !important; overflow: visible !important; }
+            .report-preview-body { flex: 1 0 auto !important; display: block !important; }
             .report-preview + .report-preview { page-break-before: always !important; }
             .report-preview:last-of-type { padding-bottom: 0 !important; }
             .report-preview .mb-8 { margin-bottom: 0 !important; }
-            .page-footer { margin-top: 0 !important; padding-top: 8px !important; }
+            .report-preview .page-footer { flex: 0 0 auto !important; margin-top: auto !important; padding-top: 8px !important; }
             table { break-inside: auto !important; }
             tr, thead, tfoot { break-inside: avoid !important; page-break-inside: avoid !important; }
             .sec-ttl { break-after: avoid !important; page-break-after: avoid !important; }
