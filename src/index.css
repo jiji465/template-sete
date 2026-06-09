@@ -27,6 +27,7 @@
             table { break-inside: auto !important; }
             tr, thead, tfoot { break-inside: avoid !important; page-break-inside: avoid !important; }
             .sec-ttl { break-after: avoid !important; page-break-after: avoid !important; }
+            .cal-card { break-before: page !important; page-break-before: always !important; }
             .print-grid-2 { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 10px !important; }
             .shadow-xl, .shadow-2xl, .shadow-lg, .shadow-md, .shadow-sm { box-shadow: none !important; }
             .avoid-break { break-inside: avoid !important; page-break-inside: avoid !important; }

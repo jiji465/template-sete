@@ -1127,7 +1127,7 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
                             const flat = Object.values(mo.days).reduce((a, b) => a.concat(b), []);
                             const mTotal = flat.reduce((s, t) => s + parseNum(t.value), 0);
                             return (
-                                <div className={card + ' mb-4'} style={cardPad} key={mi}>
+                                <div className={card + ' mb-4 avoid-break cal-card'} style={cardPad} key={mi}>
                                     <SectionTitle right={`${MESES[mo.month - 1]}/${mo.year} · ${flat.length} guia${flat.length > 1 ? 's' : ''}`}>Calendário de vencimentos</SectionTitle>
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 5, marginBottom: 5 }}>
                                         {WD.map((w, i) => <div key={i} style={{ textAlign: 'center', fontSize: '9px', fontWeight: 700, letterSpacing: '.5px', textTransform: 'uppercase', color: '#9aa2af' }}>{w}</div>)}
