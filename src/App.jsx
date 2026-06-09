@@ -359,21 +359,6 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
                                 {[2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030].map(y => <option key={y} value={String(y)}>{y}</option>)}
                             </select>
                         </div>
-                        <input className="field-input mt-2 !text-xs" type="text" placeholder="ou digite manualmente: mm/aaaa (ex.: 05/2026)"
-                            value={clientData.competenceShort || ''}
-                            onChange={e => {
-                                const v = e.target.value.replace(/[^\d/]/g, '');
-                                updateClient('competenceShort', v);
-                                const mt = v.match(/^(\d{1,2})\/(\d{4})$/);
-                                if (mt) {
-                                    const mm = String(parseInt(mt[1], 10)), yy = mt[2];
-                                    updateClient('compMonth', mm);
-                                    updateClient('compYear', yy);
-                                    updateClient('competence', (MONTHS[parseInt(mm) - 1] || '') + '/' + yy);
-                                    updateClient('competenceShort', mm.padStart(2, '0') + '/' + yy);
-                                    setValidationErrors(prev => ({ ...prev, competence: undefined }));
-                                }
-                            }} />
                         {validationErrors.competence && <p className="field-error-msg">{validationErrors.competence}</p>}
                     </div>
                     <div>
@@ -617,6 +602,44 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
                             );
                         })()
                     )}
+
+                    {(() => {
+                        const compM = parseInt(clientData.compMonth || (clientData.competenceShort ? clientData.competenceShort.split('/')[0] : ''), 10);
+                        const compY = parseInt(clientData.compYear || (clientData.competenceShort ? clientData.competenceShort.split('/')[1] : ''), 10);
+                        const hasComp = compM >= 1 && compM <= 12 && compY > 1900;
+                        const ABBR = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+                        const exist = {}; (Array.isArray(clientData.evolucao) ? clientData.evolucao : []).forEach(e => exist[e.ym] = parseNumBR(e.receita));
+                        const win = [];
+                        if (hasComp) { for (let k = 11; k >= 0; k--) { let mm = compM - k, yy = compY; while (mm <= 0) { mm += 12; yy--; } const key = String(mm).padStart(2, '0') + '/' + yy; win.push({ ym: key, mm, yy, receita: exist[key] || 0 }); } }
+                        const soma = win.reduce((s, e) => s + e.receita, 0);
+                        const setEv = (ym, raw) => { const val = parseNumBR(formatInputBRL(raw)); updateClient('evolucao', win.map(e => ({ ym: e.ym, receita: e.ym === ym ? val : e.receita }))); };
+                        return (
+                            <div className="col-span-2 border-t border-slate-100 pt-4 mt-2">
+                                <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                                    <p className="text-xs font-bold text-navy flex items-center gap-2"><TrendingUp className="w-4 h-4" /> Faturamento dos últimos 12 meses</p>
+                                    {hasComp && (
+                                        <div className="flex items-center gap-2 text-[11px]">
+                                            <span className="text-slate-500">Soma (RBT12): <strong className="text-navy">{formatCurrency(soma)}</strong></span>
+                                            <button onClick={() => updateClient('rbt12', formatBRLDisplay(soma))} className="bg-emerald-50 text-emerald-700 px-2 py-1 rounded border border-emerald-200 font-bold cursor-pointer hover:bg-emerald-100">usar como RBT12</button>
+                                        </div>
+                                    )}
+                                </div>
+                                {!hasComp ? (
+                                    <p className="text-[11px] text-slate-500 italic">Selecione a Competência (mês/ano) acima para liberar os 12 meses.</p>
+                                ) : (
+                                    <div className="grid grid-cols-4 gap-2">
+                                        {win.map((e) => (
+                                            <div key={e.ym}>
+                                                <label className="block text-[9px] font-bold uppercase text-slate-500 mb-0.5">{ABBR[e.mm - 1]}/{String(e.yy).slice(2)}</label>
+                                                <input className="field-input !py-1.5 !px-2 !text-xs text-right" type="text" value={e.receita > 0 ? formatBRLDisplay(e.receita) : ''} onChange={ev => setEv(e.ym, ev.target.value)} placeholder="0,00" />
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                <p className="text-[9px] text-slate-400 mt-2">Alimenta o gráfico de evolução do relatório. É preenchido automaticamente ao importar o PGDAS-D; aqui você pode digitar/editar manualmente.</p>
+                            </div>
+                        );
+                    })()}
                 </div>
             </div>
 
