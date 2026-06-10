@@ -5,10 +5,16 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 export const COLORS_MAP = { NAVY: "#1e3a8a", GOLD: "#C5A059", SLATE_DARK: "#334155", SLATE_MID: "#64748b" };
 export const OFFICE_NAME = "SETE Soluções Empresariais";
 
+// ===== Valores anuais — ATUALIZAR a cada virada de exercício =====
+export const SALARIO_MINIMO = 1621.00;   // 2026
+export const TETO_INSS = 8475.55;        // 2026 — Portaria MPS/MF nº 13/2026
+export const SUBLIMITE_SN = 3600000;     // sublimite do Simples: acima, ICMS/ISS fora do DAS
+export const LIMITE_SN = 4800000;        // teto do Simples Nacional
+
 export const parseNumBR = (v) => {
     if (typeof v === 'number') return v;
     if (!v) return 0;
-    return parseFloat(String(v).replace(/\./g, '').replace(',', '.')) || 0;
+    return parseFloat(String(v).replace(/[^\d.,-]/g, '').replace(/\./g, '').replace(',', '.')) || 0;
 };
 
 export const formatCurrency = (val) => {
@@ -24,7 +30,7 @@ export const calculateTotalRevenue = (data) => {
 };
 
 export const formatCNPJ = (v) => {
-    const d = v.replace(/\D/g, '').slice(0, 14);
+    const d = String(v || '').replace(/\D/g, '').slice(0, 14);
     return d.replace(/(\d{2})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1/$2').replace(/(\d{4})(\d)/, '$1-$2');
 };
 
@@ -52,9 +58,12 @@ export const DEFAULT_TAXES_SN_COMERCIO = [
     { id: 3, tax: "DIFAL", base: "", rate: "", apurado: "", retido: "", value: "", dueDate: "", obs: "Diferencial de alíquota, se aplicável", retidoManual: false },
 ];
 
-export const DEFAULT_TAXES_MEI_COMERCIO = [ { id: 1, tax: "DAS-MEI", base: "", rate: "", apurado: "76,90", retido: "", value: "76,90", dueDate: "", obs: "INSS R$ 75,90 + ICMS R$ 1,00", retidoManual: false } ];
-export const DEFAULT_TAXES_MEI_SERVICOS = [ { id: 1, tax: "DAS-MEI", base: "", rate: "", apurado: "80,90", retido: "", value: "80,90", dueDate: "", obs: "INSS R$ 75,90 + ISS R$ 5,00", retidoManual: false } ];
-export const DEFAULT_TAXES_MEI_AMBOS = [ { id: 1, tax: "DAS-MEI", base: "", rate: "", apurado: "81,90", retido: "", value: "81,90", dueDate: "", obs: "INSS R$ 75,90 + ICMS R$ 1,00 + ISS R$ 5,00", retidoManual: false } ];
+// DAS-MEI = 5% do salário-mínimo (INSS) + ICMS R$ 1,00 e/ou ISS R$ 5,00 (fixos por lei)
+const INSS_MEI = SALARIO_MINIMO * 0.05;
+const fmtMEI = (n) => n.toFixed(2).replace('.', ',');
+export const DEFAULT_TAXES_MEI_COMERCIO = [ { id: 1, tax: "DAS-MEI", base: "", rate: "", apurado: fmtMEI(INSS_MEI + 1), retido: "", value: fmtMEI(INSS_MEI + 1), dueDate: "", obs: `INSS R$ ${fmtMEI(INSS_MEI)} + ICMS R$ 1,00`, retidoManual: false } ];
+export const DEFAULT_TAXES_MEI_SERVICOS = [ { id: 1, tax: "DAS-MEI", base: "", rate: "", apurado: fmtMEI(INSS_MEI + 5), retido: "", value: fmtMEI(INSS_MEI + 5), dueDate: "", obs: `INSS R$ ${fmtMEI(INSS_MEI)} + ISS R$ 5,00`, retidoManual: false } ];
+export const DEFAULT_TAXES_MEI_AMBOS = [ { id: 1, tax: "DAS-MEI", base: "", rate: "", apurado: fmtMEI(INSS_MEI + 6), retido: "", value: fmtMEI(INSS_MEI + 6), dueDate: "", obs: `INSS R$ ${fmtMEI(INSS_MEI)} + ICMS R$ 1,00 + ISS R$ 5,00`, retidoManual: false } ];
 
 export const DEFAULT_TAXES = DEFAULT_TAXES_LP;
 
@@ -97,37 +106,55 @@ export const calcFatorR = (folha12m, rbt12) => {
     return (folha12m / rbt12) * 100;
 };
 
-export const getAnexoEfetivo = (anexo, fatorR) => {
+// A migração Anexo III ↔ V pelo Fator R só vale para atividades sujeitas a ele (LC 123, art. 18, §5º-I/J).
+// Atividades que são Anexo III por natureza (ex.: contabilidade, escolas) não migram.
+export const getAnexoEfetivo = (anexo, fatorR, sujeitoFatorR = true) => {
+    if (!sujeitoFatorR) return anexo;
     if (anexo === 'Anexo V' && fatorR >= 28) return 'Anexo III';
-    if (anexo === 'Anexo III' && fatorR > 0 && fatorR < 28) return 'Anexo V';
+    if (anexo === 'Anexo III' && fatorR < 28) return 'Anexo V';
     return anexo;
 };
+
+// Sem flag explícita, deriva: Anexo V implica atividade de Fator R; Anexo III só se há folha informada
+// (preserva o comportamento de rascunhos antigos, que não têm o campo sujeitoFatorR).
+export const isSujeitoFatorR = (data, folha12m) =>
+    data.sujeitoFatorR !== undefined ? !!data.sujeitoFatorR : (data.anexo === 'Anexo V' || (folha12m || 0) > 0);
+
+export const FERIADOS_NACIONAIS = ['01/01', '21/04', '01/05', '07/09', '12/10', '02/11', '15/11', '20/11', '25/12']; // fixos; móveis (Carnaval/Corpus Christi) não inclusos
+const pad2 = (n) => String(n).padStart(2, '0');
+const isDiaUtil = (d) => d.getDay() !== 0 && d.getDay() !== 6 && !FERIADOS_NACIONAIS.includes(pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1));
 
 export const lastBusinessDay = (month, year) => {
     const lastDay = new Date(year, month, 0).getDate();
     let d = new Date(year, month - 1, lastDay);
-    while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() - 1);
+    while (!isDiaUtil(d)) d.setDate(d.getDate() - 1);
     return d.getDate();
 };
 
-export const getDueDate = (compMonth, compYear, taxName) => {
+export const getDueDate = (compMonth, compYear, taxName, irpjCsllMode) => {
     if (!compMonth || !compYear) return '';
     const m = parseInt(compMonth), y = parseInt(compYear);
     let nextM = m + 1, nextY = y;
     if (nextM > 12) { nextM = 1; nextY++; }
-    const pad = (n) => String(n).padStart(2, '0');
+    const pad = pad2;
     const dueDateMap = {
         'PIS': 25, 'COFINS': 25, 'PIS/COFINS': 25, 'ISS': 15, 'ISS (retido)': 15,
         'CPP': 20, 'CPP (Patronal)': 20, 'RAT': 20, 'RAT (Ajustado)': 20, 'Terceiros': 20,
-        'INSS': 20, 'INSS (retido)': 20, 'INSS (Sócio)': 20, 'FGTS': 20, 
+        'INSS': 20, 'INSS (retido)': 20, 'INSS (Sócio)': 20, 'FGTS': 20,
         'DAS': 20, 'DAS-MEI': 20, 'ICMS (ST)': 10, 'DIFAL': 10,
     };
     if (['IRPJ', 'CSLL', 'Adicional IRPJ'].includes(taxName)) {
-        // Se for trimestral, o vencimento é no final do mês subsequente ao trimestre.
+        // Trimestral: a quota única vence no mês seguinte ao ENCERRAMENTO do trimestre (mar/jun/set/dez)
+        if (irpjCsllMode === 'Trimestral (Apuração)' && ![3, 6, 9, 12].includes(m)) return '';
         return `${pad(lastBusinessDay(nextM, nextY))}/${pad(nextM)}/${nextY}`;
     }
     const dia = dueDateMap[taxName];
-    return dia ? `${pad(dia)}/${pad(nextM)}/${nextY}` : '';
+    if (!dia) return '';
+    // Dia não útil: tributos federais de folha e PIS/COFINS ANTECIPAM; DAS, ISS e guias estaduais POSTERGAM
+    const antecipa = ['PIS', 'COFINS', 'PIS/COFINS', 'CPP', 'CPP (Patronal)', 'RAT', 'RAT (Ajustado)', 'Terceiros', 'INSS', 'INSS (retido)', 'INSS (Sócio)', 'FGTS'].includes(taxName);
+    const d = new Date(nextY, nextM - 1, dia);
+    while (!isDiaUtil(d)) d.setDate(d.getDate() + (antecipa ? -1 : 1));
+    return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
 };
 
 export const getBasePresumidaLP = (revenue, taxName, atividade, irpjCsllMode, equiparada) => {
@@ -151,7 +178,7 @@ export const formatBRLDisplay = (num) => {
 };
 
 // ===== Importação de PGDAS-D (PDF) =====
-export const pgNum = (s) => s ? (parseFloat(String(s).replace(/\./g, '').replace(',', '.')) || 0) : 0;
+export const pgNum = parseNumBR;
 
 export async function extractPdfText(file) {
     if (!pdfjsLib) throw new Error('Leitor de PDF (pdf.js) não carregou. Verifique a conexão.');
@@ -174,10 +201,10 @@ export function parsePGDASD(T) {
     const nome = g(/Nome\s+empresarial:\s*([\s\S]*?)\s*Data\s+de\s+abertura/i);
     const comp = g(/Per[ií]odo\s+de\s+Apura[çc][ãa]o:\s*\d{2}\/(\d{2})\/(\d{4})/i);
     const rpa = g(/RPA\)[\s\S]*?Compet[êe]ncia\s*([\d.]+,\d{2})/i);
-    const rbt12 = g(/\(RBT12\)\s*([\d.]+,\d{2})/);
+    const rbt12 = g(/\(RBT12\)[^\d]*?([\d.]+,\d{2})/);
     const folha = g(/Total\s+de\s+Folhas\s+de\s+Sal[áa]rios\s+Anteriores[\s\S]*?R\$\s*([\d.]+,\d{2})/i);
-    const fator = g(/Fator\s+r\s*=\s*([\d,]+)\s*-\s*(Anexo\s+[IVX]+)/i);
-    const das = g(/Valor\s+Total\s+do\s+D[ée]bito\s+Declarado[^\d]*([\d.]+,\d{2})\D*([\d.]+,\d{2})/i);
+    const fator = g(/Fator\s+r\s*=\s*([\d,]+)\s*[-–—]\s*(Anexo\s+[IVX]+)/i);
+    const das = g(/Valor\s+Total\s+do\s+D[ée]bito\s+Declarado[^\d]*([\d.]+,\d{2})(?:\D{0,40}([\d.]+,\d{2}))?/i);
     const mun = g(/Munic[íi]pio:\s*([A-Za-zÀ-ú][A-Za-zÀ-ú .]*?)\s*UF:\s*([A-Z]{2})/i);
 
     if (cnpj) res.cnpj = cnpj[1];
@@ -187,12 +214,14 @@ export function parsePGDASD(T) {
     if (rbt12) res.rbt12 = rbt12[1];
     if (folha) res.folha12m = folha[1];
     if (fator) { res.fatorR = fator[1]; res.anexo = fator[2].replace(/\s+/, ' '); }
-    if (das) res.das = das[2];
+    if (das) res.das = das[2] || das[1];
     if (mun) res.municipio = mun[1].trim() + '/' + mun[2];
     res.atividade = /Presta[çc][ãa]o\s+de\s+Servi[çc]os/i.test(T) ? 'Serviços' : (/Com[ée]rcio/i.test(T) ? 'Comércio' : 'Serviços');
+    // Mais de um estabelecimento: os valores capturados podem ser só da matriz — avisar o usuário
+    if ((T.match(/Estabelecimento/gi) || []).length > 1) res.multiEstab = true;
 
-    // Evolução do faturamento — seção 2.2.1 (Mercado Interno)
-    const block = T.match(/2\.2\.1\)[^]*?2\.2\.2\)/);
+    // Evolução do faturamento — seção 2.2.1 (Mercado Interno); fallback se 2.2.2 não existir no layout
+    const block = T.match(/2\.2\.1\)[^]*?(?:2\.2\.2\)|2\.3\)|$)/);
     const ev = {};
     if (block) {
         const re = /(\d{2}\/\d{4})\s+([\d.]+,\d{2})/g; let m;
@@ -222,6 +251,7 @@ export const autoFillTaxes = (data, currentTaxes) => {
     const folha12m = parseNumBR(data.folha12m !== undefined ? data.folha12m : data.folha);
     const folhaMensal = parseNumBR(data.folhaMensal !== undefined ? data.folhaMensal : data.folha);
     const atividade = data.atividade || 'Serviços';
+    const sujeitoFatorR = isSujeitoFatorR(data, folha12m);
 
     return currentTaxes.map(t => {
         const updated = { ...t };
@@ -231,18 +261,22 @@ export const autoFillTaxes = (data, currentTaxes) => {
         if (isRegimeNormal || isAnexoIV) {
             const baseFat = ['PIS', 'COFINS', 'PIS/COFINS', 'ISS'];
             const basePres = ['IRPJ', 'CSLL', 'Adicional IRPJ'];
-            const baseFolha = ['CPP', 'CPP (Patronal)', 'RAT', 'RAT (Ajustado)', 'Terceiros', 'FGTS'];
+            // CPP (20%) incide sobre folha + pró-labore; RAT, Terceiros e FGTS só sobre a folha de empregados
+            const baseCPP = ['CPP', 'CPP (Patronal)'];
+            const baseFolhaEmp = ['RAT', 'RAT (Ajustado)', 'Terceiros', 'FGTS'];
 
             if (baseFat.includes(t.tax)) {
                 updated.base = totalRevenue > 0 ? formatBRLDisplay(totalRevenue) : "";
             } else if (basePres.includes(t.tax) && isRegimeNormal) {
-                const baseRevenueToUse = (data.irpjCsllMode === 'Trimestral (Apuração)' || data.irpjCsllMode === 'Estimativa (Anual)') && parseNumBR(data.periodRevenue) > 0 
-                    ? parseNumBR(data.periodRevenue) 
+                const baseRevenueToUse = (data.irpjCsllMode === 'Trimestral (Apuração)' || data.irpjCsllMode === 'Estimativa (Anual)') && parseNumBR(data.periodRevenue) > 0
+                    ? parseNumBR(data.periodRevenue)
                     : totalRevenue;
                 updated.base = baseRevenueToUse > 0 ? formatBRLDisplay(getBasePresumidaLP(baseRevenueToUse, t.tax, atividade, data.irpjCsllMode, data.equiparacaoHospitalar ? data.receitaEquiparacao : 0)) : "";
-            } else if (baseFolha.includes(t.tax)) {
+            } else if (baseCPP.includes(t.tax)) {
                 const totalFolhaEProLabore = proLabore + folhaMensal;
                 updated.base = totalFolhaEProLabore > 0 ? formatBRLDisplay(totalFolhaEProLabore) : "";
+            } else if (baseFolhaEmp.includes(t.tax)) {
+                updated.base = folhaMensal > 0 ? formatBRLDisplay(folhaMensal) : "";
             }
             
             const b = parseNumBR(updated.base);
@@ -282,16 +316,19 @@ export const autoFillTaxes = (data, currentTaxes) => {
         if (data.regime === 'Simples Nacional') {
             if (t.tax === 'DAS') {
                 if (totalRevenue > 0 && rbt12 > 0 && data.anexo) {
-                    const fR = calcFatorR(folha12m, rbt12); 
-                    const anexoEf = getAnexoEfetivo(data.anexo, fR);
+                    const fR = calcFatorR(folha12m, rbt12);
+                    const anexoEf = getAnexoEfetivo(data.anexo, fR, sujeitoFatorR);
                     const res = calcAliquotaEfetivaSN(rbt12, anexoEf);
-                    
+
                     updated.base = formatBRLDisplay(totalRevenue);
-                    updated.rate = res.rate.toFixed(2).replace('.', ',');
-                    
+                    updated.rate = res.rate.toFixed(4).replace('.', ',');
+
                     const apuradoDAS = totalRevenue * res.rate / 100;
                     updated.apurado = formatBRLDisplay(apuradoDAS);
-                    updated.obs = `${anexoEf} (Faixa ${res.faixa}) — Alíq. Nom. ${res.nominal.toFixed(2).replace('.', ',')}%`;
+                    let obsDAS = `${anexoEf} (Faixa ${res.faixa}) — Alíq. Nom. ${res.nominal.toFixed(2).replace('.', ',')}%`;
+                    if (rbt12 > LIMITE_SN) obsDAS += ' · ATENÇÃO: RBT12 acima do limite do Simples (R$ 4,8 mi)';
+                    else if (rbt12 > SUBLIMITE_SN) obsDAS += ' · RBT12 acima do sublimite: ICMS/ISS fora do DAS';
+                    updated.obs = obsDAS;
                 } else {
                     updated.base = ""; updated.apurado = ""; updated.obs = "";
                 }
@@ -300,14 +337,13 @@ export const autoFillTaxes = (data, currentTaxes) => {
 
         if (t.tax === 'INSS' || t.tax === 'INSS (Sócio)') {
             if (proLabore > 0) {
-                updated.base = formatBRLDisplay(proLabore);
-                const r = parseNumBR(updated.rate); 
-                if (r > 0) {
-                    updated.apurado = formatBRLDisplay(proLabore * r / 100);
-                } else if (!updated.rate || updated.rate.trim() === '') {
-                    updated.rate = "11,00";
-                    updated.apurado = formatBRLDisplay(proLabore * 0.11);
-                }
+                // Contribuição do sócio: 11% sobre o pró-labore LIMITADO ao teto previdenciário
+                const baseINSS = Math.min(proLabore, TETO_INSS);
+                updated.base = formatBRLDisplay(baseINSS);
+                let r = parseNumBR(updated.rate);
+                if (!(r > 0)) { updated.rate = "11,00"; r = 11; }
+                updated.apurado = formatBRLDisplay(baseINSS * r / 100);
+                if (proLabore > TETO_INSS) updated.obs = 'Retenção sobre Pró-labore · base limitada ao teto do INSS (R$ ' + formatBRLDisplay(TETO_INSS) + ')';
             } else {
                 updated.base = ""; updated.apurado = "";
             }
@@ -315,15 +351,19 @@ export const autoFillTaxes = (data, currentTaxes) => {
 
         const apurado = parseNumBR(updated.apurado);
         const retido = parseNumBR(updated.retido);
+        // Tributos gerenciados pelo motor têm o valor recalculado/limpo; linhas customizadas
+        // (nome livre, só "Valor" digitado) preservam o que o usuário digitou
+        const MANAGED = ['PIS', 'COFINS', 'PIS/COFINS', 'ISS', 'IRPJ', 'CSLL', 'Adicional IRPJ', 'CPP', 'CPP (Patronal)', 'RAT', 'RAT (Ajustado)', 'Terceiros', 'FGTS', 'DAS', 'INSS', 'INSS (Sócio)'];
         if (apurado > 0 || retido > 0) {
             updated.value = formatBRLDisplay(Math.max(0, apurado - retido));
-        } else {
+        } else if (MANAGED.includes(t.tax)) {
             updated.value = "";
         }
 
         if (data.compMonth && data.compYear && t.tax) {
-            const due = getDueDate(data.compMonth, data.compYear, t.tax);
+            const due = getDueDate(data.compMonth, data.compYear, t.tax, data.irpjCsllMode);
             if (due) updated.dueDate = due;
+            else if (['IRPJ', 'CSLL', 'Adicional IRPJ'].includes(t.tax) && data.irpjCsllMode === 'Trimestral (Apuração)') updated.dueDate = '';
         }
 
         return updated;

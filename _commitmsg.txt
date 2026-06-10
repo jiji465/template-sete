@@ -1,0 +1,34 @@
+Auditoria completa: correções fiscais, de UI e melhorias
+
+Fiscal (engine.js):
+- INSS do pró-labore limitado ao teto previdenciário (R$ 8.475,55/2026)
+- Fator R só migra Anexo III<->V para atividades sujeitas (checkbox novo);
+  removida a guarda fatorR>0 (folha zero agora vai ao Anexo V quando sujeita)
+- RAT/Terceiros/FGTS calculados só sobre a folha; CPP segue folha+pró-labore
+- DAS-MEI derivado do salário-mínimo 2026 (R$ 1.621 -> INSS R$ 81,05)
+- Alerta no DAS para RBT12 acima do sublimite (3,6mi) e do limite (4,8mi)
+- Alíquota do DAS com 4 casas (padrão PGDAS-D)
+- Vencimentos ajustam fim de semana/feriado fixo (DAS/ISS postergam;
+  PIS/COFINS/INSS/FGTS antecipam); IRPJ/CSLL trimestral só vence em
+  mar/jun/set/dez
+- Parser PGDAS-D: tolera layouts variantes (RBT12, en-dash, DAS com 1 valor),
+  fallback da evolução, aviso de múltiplos estabelecimentos
+- parseNumBR aceita prefixo R$; formatCNPJ com guarda de nulo
+
+UI (App.jsx):
+- Ctrl+P via ref (não usa mais dados da primeira renderização)
+- Removido key={tab}: trocar de aba não remonta o editor
+- Valores digitados em tributos customizados preservados no recálculo
+- Recalc dispara ao mudar competência/faturamento acumulado/flag Fator R
+- Máscara na alíquota (ponto->vírgula) e no vencimento (dd/mm/aaaa)
+- Calendário multi-mês: meses extras viram páginas próprias no PDF
+- Vencimento inválido não entra no calendário (sem undefined/NaN no PDF)
+- Toast corrigido (substituição não morre cedo); rascunho com formato
+  inesperado não derruba o app; clipboard com fallback; MEI sem faturamento
+  pode exportar PDF; timeout de 30s no import de PDF; aviso de filiais
+- Removidos recharts (não usado) e código morto; favicon + meta description
+
+Validado no dev server: Fator R, teto INSS, vencimentos em fim de semana e
+preservação de valores. HTML único atualizado em paridade.
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>

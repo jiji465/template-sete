@@ -31,14 +31,11 @@
             .print-grid-2 { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 10px !important; }
             .shadow-xl, .shadow-2xl, .shadow-lg, .shadow-md, .shadow-sm { box-shadow: none !important; }
             .avoid-break { break-inside: avoid !important; page-break-inside: avoid !important; }
-            .recharts-wrapper { width: 100% !important; }
-            .recharts-surface { overflow: visible !important; }
             a[href]:after { content: none !important; }
             .print-navy { color: #1e3a8a !important; }
             .print-white { color: white !important; }
             .print-gold { color: #C5A059 !important; }
             .print-bg-navy { background-color: #1e3a8a !important; }
-            .print-chart-fixed { height: 150px !important; width: 100% !important; }
             .print-fator-r-box { background-color: #f8fafc !important; border: 1px solid #cbd5e1 !important; }
             .print-bg-emerald { background-color: #ecfdf5 !important; border-color: #a7f3d0 !important; }
             .print-bg-red { background-color: #fef2f2 !important; border-color: #fca5a5 !important; }

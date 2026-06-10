@@ -1,9 +1,5 @@
 import React, { useState, useCallback } from 'react';
 import {
-    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
-    PieChart, Pie
-} from 'recharts';
-import {
     Printer, Plus, Trash2, FileCheck, Eye, Edit3,
     DollarSign, Calculator, TrendingUp, BookOpen, Info,
     Landmark, Building2, Receipt, BadgePercent, Scale, Save,
@@ -12,7 +8,7 @@ import {
 } from 'lucide-react';
 import iconeUrl from './assets/icone.png';
 import {
-    COLORS_MAP, DEFAULT_TAXES, DEFAULT_TAXES_LP, DEFAULT_TAXES_MEI_AMBOS, DEFAULT_TAXES_MEI_COMERCIO, DEFAULT_TAXES_MEI_SERVICOS, DEFAULT_TAXES_SN_COMERCIO, DEFAULT_TAXES_SN_SERVICOS, GLOSSARY, MONTHS, OFFICE_NAME, SN_TABLES, STORAGE_KEY, autoFillTaxes, calcAliquotaEfetivaSN, calcFatorR, calculateTotalRevenue, extractPdfText, formatBRLDisplay, formatCNPJ, formatCurrency, formatPercent, getAnexoEfetivo, getBasePresumidaLP, getDueDate, lastBusinessDay, parseNumBR, parsePGDASD, pgNum
+    DEFAULT_TAXES, DEFAULT_TAXES_LP, DEFAULT_TAXES_MEI_AMBOS, DEFAULT_TAXES_MEI_COMERCIO, DEFAULT_TAXES_MEI_SERVICOS, DEFAULT_TAXES_SN_COMERCIO, DEFAULT_TAXES_SN_SERVICOS, GLOSSARY, MONTHS, OFFICE_NAME, STORAGE_KEY, autoFillTaxes, calcAliquotaEfetivaSN, calcFatorR, calculateTotalRevenue, extractPdfText, formatBRLDisplay, formatCNPJ, formatCurrency, formatPercent, getAnexoEfetivo, getDueDate, isSujeitoFatorR, parseNumBR, parsePGDASD, pgNum
 } from './lib/engine.js';
 
 const BRAND_ICON = iconeUrl;
@@ -23,8 +19,8 @@ const FatorRDashboard = ({ clientData, isPrint = false }) => {
     const folha12m = parseNumBR(clientData.folha12m !== undefined ? clientData.folha12m : clientData.folha);
     
     const fR = calcFatorR(folha12m, rbt12);
-    const anexoEf = getAnexoEfetivo(clientData.anexo, fR);
-    
+    const anexoEf = getAnexoEfetivo(clientData.anexo, fR, isSujeitoFatorR(clientData, folha12m));
+
     const rateIII = calcAliquotaEfetivaSN(rbt12, 'Anexo III').rate;
     const rateV = calcAliquotaEfetivaSN(rbt12, 'Anexo V').rate;
     
@@ -146,7 +142,10 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
         if (!file) return;
         setImportMsg({ type: 'load', text: 'Lendo PDF…' });
         try {
-            const text = await extractPdfText(file);
+            const text = await Promise.race([
+                extractPdfText(file),
+                new Promise((_, rej) => setTimeout(() => rej(new Error('tempo esgotado ao ler o arquivo (30s)')), 30000))
+            ]);
             const d = parsePGDASD(text);
             if (!d.ok) { setImportMsg({ type: 'err', text: d.error || 'Não consegui ler como PGDAS-D.' }); return; }
 
@@ -176,7 +175,12 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
             setClientData(newData);
             setTaxes(autoFillTaxes(newData, [dasTax]));
             setValidationErrors({});
-            setImportMsg({ type: 'ok', text: `Importado: ${d.competenceShort || ''} · DAS ${formatCurrency(dasNum)}` });
+            if (d.multiEstab) {
+                setImportMsg({ type: 'err', text: `Importado: ${d.competenceShort || ''} · DAS ${formatCurrency(dasNum)} — PDF com mais de um estabelecimento, confira os valores` });
+            } else {
+                setImportMsg({ type: 'ok', text: `Importado: ${d.competenceShort || ''} · DAS ${formatCurrency(dasNum)}` });
+                setTimeout(() => setImportMsg(m => (m && m.type === 'ok') ? null : m), 8000);
+            }
         } catch (e) {
             console.error(e);
             setImportMsg({ type: 'err', text: 'Erro ao ler o PDF: ' + e.message });
@@ -227,7 +231,11 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
         clientData.regime,
         clientData.equiparacaoHospitalar,
         clientData.receitaEquiparacao,
-        clientData.irpjCsllMode
+        clientData.irpjCsllMode,
+        clientData.compMonth,
+        clientData.compYear,
+        clientData.periodRevenue,
+        clientData.sujeitoFatorR
     ]);
 
     const updateTax = (id, field, val) => {
@@ -446,6 +454,17 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
                                 </div>
                             )}
 
+                            {(clientData.anexo === 'Anexo V' || clientData.anexo === 'Anexo III') && (
+                                <label className="col-span-2 flex items-start gap-2 cursor-pointer select-none bg-white p-3 rounded-lg border border-blue-200">
+                                    <input type="checkbox" className="w-4 h-4 mt-0.5 accent-blue-700"
+                                        checked={isSujeitoFatorR(clientData, parseNumBR(clientData.folha12m !== undefined ? clientData.folha12m : clientData.folha))}
+                                        onChange={e => updateClient('sujeitoFatorR', e.target.checked)} />
+                                    <span className="text-xs font-bold text-navy leading-relaxed">Atividade sujeita ao Fator R
+                                        <span className="font-medium text-slate-500"> — aplica a migração Anexo III ↔ V conforme a folha atinja ou não 28% do RBT12 (LC 123, §5º-I/J: fisioterapia, medicina, engenharia etc.). Desmarque para atividades que são Anexo III por natureza (ex.: contabilidade, escolas), que não migram para o Anexo V.</span>
+                                    </span>
+                                </label>
+                            )}
+
                             {clientData.anexo === 'Anexo IV' && (
                                 <div>
                                     <label className="field-label">Folha de Salários Mensal (R$)</label>
@@ -572,7 +591,7 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
                             const rbt12 = parseNumBR(clientData.rbt12);
                             const folha12m = parseNumBR(clientData.folha12m !== undefined ? clientData.folha12m : clientData.folha);
                             const fR = calcFatorR(folha12m, rbt12);
-                            const anexoEf = getAnexoEfetivo(clientData.anexo, fR);
+                            const anexoEf = getAnexoEfetivo(clientData.anexo, fR, isSujeitoFatorR(clientData, folha12m));
                             const res = calcAliquotaEfetivaSN(rbt12, anexoEf);
                             return (
                                 <div className="col-span-2 bg-blue-50 border border-blue-200 rounded-xl p-4 mt-2">
@@ -716,7 +735,7 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
                                 <tr key={row.id} className="border-b border-slate-100 tax-row group">
                                     <td className="py-2 px-1"><input className="field-input !py-1.5 !px-2 !text-xs font-bold text-navy" value={row.tax} onChange={e => updateTax(row.id, 'tax', e.target.value)} placeholder="Nome" /></td>
                                     <td className="py-2 px-1"><input className="field-input !py-1.5 !px-2 !text-xs text-right" value={row.base} onChange={e => updateTax(row.id, 'base', formatInputBRL(e.target.value))} placeholder="0,00" /></td>
-                                    <td className="py-2 px-1"><input className="field-input !py-1.5 !px-2 !text-xs text-center bg-slate-50" value={row.rate} onChange={e => updateTax(row.id, 'rate', e.target.value)} placeholder="0,00" /></td>
+                                    <td className="py-2 px-1"><input className="field-input !py-1.5 !px-2 !text-xs text-center bg-slate-50" value={row.rate} onChange={e => updateTax(row.id, 'rate', e.target.value.replace(/\./g, ',').replace(/[^\d,]/g, ''))} placeholder="0,00" /></td>
                                     
                                     {showRetentionsTable && (
                                         <>
@@ -734,9 +753,9 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
                                     )}
 
                                     <td className="py-2 px-1"><input className={`field-input !py-1.5 !px-2 !text-xs text-right font-bold text-navy ${showRetentionsTable ? 'bg-blue-50 border-blue-200' : ''}`} value={row.value} onChange={e => updateTax(row.id, 'value', formatInputBRL(e.target.value))} placeholder="0,00" /></td>
-                                    <td className="py-2 px-1"><input className="field-input !py-1.5 !px-2 !text-xs text-center" value={row.dueDate} onChange={e => updateTax(row.id, 'dueDate', e.target.value)} placeholder="dd/mm/aaaa" /></td>
+                                    <td className="py-2 px-1"><input className="field-input !py-1.5 !px-2 !text-xs text-center" value={row.dueDate} onChange={e => { const dg = e.target.value.replace(/\D/g, '').slice(0, 8); const fmt = dg.length > 4 ? dg.slice(0, 2) + '/' + dg.slice(2, 4) + '/' + dg.slice(4) : dg.length > 2 ? dg.slice(0, 2) + '/' + dg.slice(2) : dg; updateTax(row.id, 'dueDate', fmt); }} placeholder="dd/mm/aaaa" /></td>
                                     <td className="py-2 px-1"><input className="field-input !py-1.5 !px-2 !text-[11px]" value={row.obs} onChange={e => updateTax(row.id, 'obs', e.target.value)} placeholder="Observação" /></td>
-                                    <td className="py-2 px-1 text-center"><button onClick={() => removeTax(row.id)} className="text-slate-300 hover:text-red-500 transition-colors cursor-pointer p-1 opacity-0 group-hover:opacity-100"><Trash2 className="w-4 h-4" /></button></td>
+                                    <td className="py-2 px-1 text-center"><button onClick={() => removeTax(row.id)} aria-label={'Remover ' + (row.tax || 'tributo')} className="text-slate-300 hover:text-red-500 transition-colors cursor-pointer p-1 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"><Trash2 className="w-4 h-4" /></button></td>
                                 </tr>
                             ))}
                         </tbody>
@@ -766,7 +785,7 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
     const rbt12 = parseNum(clientData.rbt12);
     const folha12m = parseNum(clientData.folha12m !== undefined ? clientData.folha12m : clientData.folha);
     const fR = calcFatorR(folha12m, rbt12);
-    const anexoEfetivo = clientData.regime === 'Simples Nacional' && clientData.anexo ? getAnexoEfetivo(clientData.anexo, fR) : clientData.anexo;
+    const anexoEfetivo = clientData.regime === 'Simples Nacional' && clientData.anexo ? getAnexoEfetivo(clientData.anexo, fR, isSujeitoFatorR(clientData, folha12m)) : clientData.anexo;
 
     const hasRetentions = parseNum(clientData.revenueRetained) > 0 || taxes.some(t => parseNum(t.retido) > 0 || t.retidoManual);
     const isSN = clientData.regime === 'Simples Nacional' || clientData.regime === 'MEI';
@@ -833,29 +852,23 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
 
     // Vencimentos — uma guia por linha (detalhado, sem agrupar)
     const MES_ABBR = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-    const GUIA_INFO = {
-        'DAS': 'Documento de Arrecadação do Simples', 'DAS-MEI': 'DAS — MEI',
-        'FGTS': 'FGTS Digital', 'INSS': 'GPS / DARF', 'INSS (Sócio)': 'GPS — pró-labore', 'INSS (retido)': 'INSS retido na fonte',
-        'IRPJ': 'DARF', 'CSLL': 'DARF', 'Adicional IRPJ': 'DARF', 'PIS': 'DARF', 'COFINS': 'DARF', 'PIS/COFINS': 'DARF',
-        'ISS': 'Guia municipal', 'ISS (retido)': 'ISS retido na fonte', 'ICMS (ST)': 'GNRE / guia estadual', 'DIFAL': 'GNRE',
-        'CPP (Patronal)': 'GPS', 'CPP': 'GPS', 'Terceiros': 'GPS', 'RAT': 'GPS', 'RAT (Ajustado)': 'GPS',
-    };
-    const guiaSub = (t) => (t.obs && t.obs.trim()) ? t.obs : (GUIA_INFO[t.tax] || 'Guia de recolhimento');
-    const withDue = taxes.filter(t => t.tax && t.dueDate && parseNum(t.value) > 0)
+    // Só datas dd/mm/aaaa válidas entram no calendário (texto livre mal formatado não vai pro PDF)
+    const validDue = (s) => { if (!/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return false; const d = +s.slice(0, 2), m = +s.slice(3, 5); return d >= 1 && d <= 31 && m >= 1 && m <= 12; };
+    const withDue = taxes.filter(t => t.tax && t.dueDate && validDue(t.dueDate) && parseNum(t.value) > 0)
         .sort((a, b) => {
             const pa = a.dueDate.split('/'), pb = b.dueDate.split('/');
             return new Date(pa[2], pa[1] - 1, pa[0]) - new Date(pb[2], pb[1] - 1, pb[0]);
         });
     const totalDue = calcTotal(withDue);
-    const dueStatus = (dateStr) => {
-        const p = dateStr.split('/'); if (p.length !== 3) return { t: 'a vencer', ok: true, soon: false };
-        const due = new Date(+p[2], +p[1] - 1, +p[0]); const today = new Date(); today.setHours(0, 0, 0, 0);
-        const diff = Math.ceil((due - today) / 86400000);
-        if (diff < 0) return { t: 'Vencido', ok: false, soon: true };
-        if (diff === 0) return { t: 'Hoje', ok: false, soon: true };
-        if (diff <= 5) return { t: diff + ' dias', ok: false, soon: true };
-        return { t: 'a vencer', ok: true, soon: false };
-    };
+    // Agrupamento por mês — o 1º mês fica na página Vencimentos; meses extras viram páginas próprias
+    const venciByMonth = {};
+    withDue.forEach(t => {
+        const pp = t.dueDate.split('/'); const d = +pp[0], m = +pp[1], y = +pp[2];
+        const k = y + '-' + m;
+        if (!venciByMonth[k]) venciByMonth[k] = { year: y, month: m, days: {} };
+        (venciByMonth[k].days[d] = venciByMonth[k].days[d] || []).push(t);
+    });
+    const venciMonths = Object.values(venciByMonth).sort((a, b) => (a.year - b.year) || (a.month - b.month));
 
     // ===== Glossário inteligente =====
     const activeTaxNames = taxes.map(t => t.tax);
@@ -878,7 +891,6 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
     gloss = gloss.filter(g => { const k = g.acronym.toLowerCase(); if (seenGloss.has(k)) return false; seenGloss.add(k); return true; });
 
     const hasPage2 = !!economia || gloss.length > 0 || !!clientData.observations;
-    const totalPages = 1 + (hasPage2 ? 1 : 0);
 
     const cellL = { padding: '6.5px 0', textAlign: 'left' };
     const cellR = { padding: '6.5px 0', textAlign: 'right', fontVariantNumeric: 'tabular-nums' };
@@ -956,6 +968,50 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
             <div style={{ fontSize: '9.5px', marginTop: 7, opacity: cls === 'w' ? 1 : .9, color: cls === 'w' ? '#646d7c' : undefined }}>{foot}</div>
         </div>
     );
+
+    const CalMonthCard = ({ mo }) => {
+        const WD = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+        const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+        const first = new Date(mo.year, mo.month - 1, 1).getDay();
+        const ndays = new Date(mo.year, mo.month, 0).getDate();
+        const cells = [];
+        for (let i = 0; i < first; i++) cells.push(null);
+        for (let d = 1; d <= ndays; d++) cells.push(d);
+        const flat = Object.values(mo.days).reduce((a, b) => a.concat(b), []);
+        const mTotal = flat.reduce((s, t) => s + parseNum(t.value), 0);
+        return (
+            <div className={card + ' mb-4 avoid-break'} style={cardPad}>
+                <SectionTitle right={`${MONTHS[mo.month - 1]}/${mo.year} · ${flat.length} guia${flat.length > 1 ? 's' : ''}`}>Calendário de vencimentos</SectionTitle>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 5, marginBottom: 5 }}>
+                    {WD.map((w, i) => <div key={i} style={{ textAlign: 'center', fontSize: '9px', fontWeight: 700, letterSpacing: '.5px', textTransform: 'uppercase', color: '#9aa2af' }}>{w}</div>)}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 5 }}>
+                    {cells.map((d, i) => {
+                        if (d === null) return <div key={i}></div>;
+                        const items = mo.days[d];
+                        if (!items) return <div key={i} style={{ minHeight: 52, border: '1px solid #eef0f3', borderRadius: 8, padding: '5px 6px', background: '#fafbfc' }}><span style={{ fontSize: '11px', fontWeight: 700, color: '#9aa2af' }}>{d}</span></div>;
+                        const sub = items.reduce((s, t) => s + parseNum(t.value), 0);
+                        const due = new Date(mo.year, mo.month - 1, d); const diff = Math.ceil((due - hoje) / 86400000);
+                        const alert = diff <= 5;
+                        return (
+                            <div key={i} className="avoid-break" style={{ minHeight: 52, border: '1px solid ' + (alert ? '#f3d6cb' : '#e2e8f0'), borderRadius: 8, padding: '5px 6px', background: alert ? '#fcf1ec' : '#fff', display: 'flex', flexDirection: 'column' }}>
+                                <span style={{ fontSize: '11px', fontWeight: 700, color: '#1a2230' }}>{d}</span>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 4 }}>
+                                    {items.map((t, j) => { const isDas = /^DAS/.test(t.tax); return <span key={j} style={{ fontSize: '7.5px', fontWeight: 700, padding: '1px 5px', borderRadius: 20, background: isDas ? '#fcefd7' : '#e7ecf3', color: isDas ? '#b06f06' : '#0a3160' }}>{t.tax}</span>; })}
+                                </div>
+                                <span style={{ marginTop: 'auto', textAlign: 'right', paddingTop: 3, fontSize: '9px', fontWeight: 800, color: alert ? '#b5402b' : '#001D3D', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(sub)}</span>
+                            </div>
+                        );
+                    })}
+                </div>
+                <div className="flex items-center" style={{ gap: 16, marginTop: 14, paddingTop: 11, borderTop: '2px solid #001D3D' }}>
+                    <span className="flex items-center" style={{ gap: 6, fontSize: '10px', color: '#646d7c' }}><i style={{ width: 10, height: 10, borderRadius: 3, background: '#fcf1ec', border: '1px solid #f3d6cb', display: 'inline-block' }}></i> Vence em ≤5 dias</span>
+                    <span className="flex items-center" style={{ gap: 6, fontSize: '10px', color: '#646d7c' }}><i style={{ width: 10, height: 10, borderRadius: 3, background: '#fff', border: '1px solid #e2e8f0', display: 'inline-block' }}></i> A vencer</span>
+                    <span style={{ marginLeft: 'auto', fontSize: '11px', color: '#646d7c', fontWeight: 600 }}>Total a recolher <b style={{ fontSize: '15px', color: '#001D3D', fontWeight: 800, marginLeft: 6 }}>{formatCurrency(mTotal)}</b></span>
+                </div>
+            </div>
+        );
+    };
 
     return (
         <div className="max-w-[210mm] mx-auto print-wrapper">
@@ -1116,60 +1172,7 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
                 <div className="report-preview">
                     <div className="report-preview-body">
                         <Header kicker="Relatório Mensal" title="Vencimentos" sub={`${clientData.clientName || 'Empresa'} · ${compLabel}`} />
-                        {(() => {
-                        const WD = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-                        const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-                        const byMonth = {};
-                        withDue.forEach(t => {
-                            const pp = t.dueDate.split('/'); const d = +pp[0], m = +pp[1], y = +pp[2];
-                            const k = y + '-' + m;
-                            if (!byMonth[k]) byMonth[k] = { year: y, month: m, days: {} };
-                            (byMonth[k].days[d] = byMonth[k].days[d] || []).push(t);
-                        });
-                        const months = Object.values(byMonth).sort((a, b) => (a.year - b.year) || (a.month - b.month));
-                        const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
-                        return months.map((mo, mi) => {
-                            const first = new Date(mo.year, mo.month - 1, 1).getDay();
-                            const ndays = new Date(mo.year, mo.month, 0).getDate();
-                            const cells = [];
-                            for (let i = 0; i < first; i++) cells.push(null);
-                            for (let d = 1; d <= ndays; d++) cells.push(d);
-                            const flat = Object.values(mo.days).reduce((a, b) => a.concat(b), []);
-                            const mTotal = flat.reduce((s, t) => s + parseNum(t.value), 0);
-                            return (
-                                <div className={card + ' mb-4 avoid-break'} style={cardPad} key={mi}>
-                                    <SectionTitle right={`${MESES[mo.month - 1]}/${mo.year} · ${flat.length} guia${flat.length > 1 ? 's' : ''}`}>Calendário de vencimentos</SectionTitle>
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 5, marginBottom: 5 }}>
-                                        {WD.map((w, i) => <div key={i} style={{ textAlign: 'center', fontSize: '9px', fontWeight: 700, letterSpacing: '.5px', textTransform: 'uppercase', color: '#9aa2af' }}>{w}</div>)}
-                                    </div>
-                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 5 }}>
-                                        {cells.map((d, i) => {
-                                            if (d === null) return <div key={i}></div>;
-                                            const items = mo.days[d];
-                                            if (!items) return <div key={i} style={{ minHeight: 52, border: '1px solid #eef0f3', borderRadius: 8, padding: '5px 6px', background: '#fafbfc' }}><span style={{ fontSize: '11px', fontWeight: 700, color: '#9aa2af' }}>{d}</span></div>;
-                                            const sub = items.reduce((s, t) => s + parseNum(t.value), 0);
-                                            const due = new Date(mo.year, mo.month - 1, d); const diff = Math.ceil((due - hoje) / 86400000);
-                                            const alert = diff <= 5;
-                                            return (
-                                                <div key={i} className="avoid-break" style={{ minHeight: 52, border: '1px solid ' + (alert ? '#f3d6cb' : '#e2e8f0'), borderRadius: 8, padding: '5px 6px', background: alert ? '#fcf1ec' : '#fff', display: 'flex', flexDirection: 'column' }}>
-                                                    <span style={{ fontSize: '11px', fontWeight: 700, color: '#1a2230' }}>{d}</span>
-                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 4 }}>
-                                                        {items.map((t, j) => { const isDas = /^DAS/.test(t.tax); return <span key={j} style={{ fontSize: '7.5px', fontWeight: 700, padding: '1px 5px', borderRadius: 20, background: isDas ? '#fcefd7' : '#e7ecf3', color: isDas ? '#b06f06' : '#0a3160' }}>{t.tax}</span>; })}
-                                                    </div>
-                                                    <span style={{ marginTop: 'auto', textAlign: 'right', paddingTop: 3, fontSize: '9px', fontWeight: 800, color: alert ? '#b5402b' : '#001D3D', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(sub)}</span>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                    <div className="flex items-center" style={{ gap: 16, marginTop: 14, paddingTop: 11, borderTop: '2px solid #001D3D' }}>
-                                        <span className="flex items-center" style={{ gap: 6, fontSize: '10px', color: '#646d7c' }}><i style={{ width: 10, height: 10, borderRadius: 3, background: '#fcf1ec', border: '1px solid #f3d6cb', display: 'inline-block' }}></i> Vence em ≤5 dias</span>
-                                        <span className="flex items-center" style={{ gap: 6, fontSize: '10px', color: '#646d7c' }}><i style={{ width: 10, height: 10, borderRadius: 3, background: '#fff', border: '1px solid #e2e8f0', display: 'inline-block' }}></i> A vencer</span>
-                                        <span style={{ marginLeft: 'auto', fontSize: '11px', color: '#646d7c', fontWeight: 600 }}>Total a recolher <b style={{ fontSize: '15px', color: '#001D3D', fontWeight: 800, marginLeft: 6 }}>{formatCurrency(mTotal)}</b></span>
-                                    </div>
-                                </div>
-                            );
-                        });
-                    })()}
+                        <CalMonthCard mo={venciMonths[0]} />
                         {(() => {
                             const parseDMY = s => { const p = s.split('/'); return new Date(+p[2], +p[1] - 1, +p[0]); };
                             const sortedG = [...withDue].sort((a, b) => parseDMY(a.dueDate) - parseDMY(b.dueDate));
@@ -1228,6 +1231,17 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
                     <Footer />
                 </div>
             )}
+
+            {/* Meses extras do calendário — cada um em página própria para não estourar a folha */}
+            {venciMonths.slice(1).map((mo, i) => (
+                <div className="report-preview" key={'vm' + i}>
+                    <div className="report-preview-body">
+                        <Header kicker="Relatório Mensal" title="Vencimentos — continuação" sub={`${clientData.clientName || 'Empresa'} · ${compLabel}`} />
+                        <CalMonthCard mo={mo} />
+                    </div>
+                    <Footer />
+                </div>
+            ))}
 
                         {/* ===== PÁGINA 2 ===== */}
             {hasPage2 && (
@@ -1305,13 +1319,16 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
 
 const Toast = ({ message, type = 'success', onClose }) => {
     const [hiding, setHiding] = useState(false);
+    const onCloseRef = React.useRef(onClose);
+    onCloseRef.current = onClose;
     React.useEffect(() => {
+        setHiding(false);
         const timer = setTimeout(() => {
             setHiding(true);
-            setTimeout(onClose, 300);
+            setTimeout(() => onCloseRef.current(), 300);
         }, 2800);
         return () => clearTimeout(timer);
-    }, []);
+    }, [message, type]);
     const icons = {
         success: <div className="w-5 h-5 bg-emerald-500 rounded-full flex items-center justify-center text-white text-xs font-bold">✓</div>,
         warning: <div className="w-5 h-5 bg-amber-500 rounded-full flex items-center justify-center text-white text-xs font-bold">!</div>,
@@ -1344,7 +1361,15 @@ const App = () => {
         try {
             const saved = localStorage.getItem(STORAGE_KEY);
             if (saved) {
-                return JSON.parse(saved);
+                const parsed = JSON.parse(saved);
+                // Rascunho com formato inesperado (drift de versão) não pode derrubar o app
+                if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+                if (parsed.taxes !== undefined) {
+                    if (!Array.isArray(parsed.taxes)) return null;
+                    parsed.taxes = parsed.taxes.filter(t => t && typeof t === 'object').map((t, i) => ({ ...t, id: t.id !== undefined ? t.id : Date.now() + i }));
+                }
+                if (parsed.clientData !== undefined && (typeof parsed.clientData !== 'object' || parsed.clientData === null)) return null;
+                return parsed;
             }
         } catch (e) { }
         return null;
@@ -1372,11 +1397,13 @@ const App = () => {
         }
     }, []);
 
+    // Ref evita closure obsoleta: o atalho sempre usa a versão atual de handlePrint (dados atuais)
+    const handlePrintRef = React.useRef(() => { });
     React.useEffect(() => {
         const handleKeyDown = (e) => {
             if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
                 e.preventDefault();
-                handlePrint();
+                handlePrintRef.current();
             }
         };
         window.addEventListener('keydown', handleKeyDown);
@@ -1408,10 +1435,11 @@ const App = () => {
         const errors = {};
         if (!clientData.clientName?.trim()) errors.clientName = 'Nome é obrigatório';
         if (!clientData.competenceShort?.trim()) errors.competence = 'Competência é obrigatória';
-        
+
+        // MEI sem faturamento ainda deve o DAS fixo — o relatório de vencimentos continua útil
         const totalRev = parseNumBR(clientData.revenueRetained) + parseNumBR(clientData.revenueNonRetained) + parseNumBR(clientData.revenue);
-        if (totalRev <= 0) errors.revenue = 'O faturamento total (soma) deve ser maior que zero';
-        
+        if (totalRev <= 0 && clientData.regime !== 'MEI') errors.revenue = 'O faturamento total (soma) deve ser maior que zero';
+
         setValidationErrors(errors);
         return Object.keys(errors).length === 0;
     };
@@ -1439,6 +1467,7 @@ const App = () => {
             setTimeout(restore, 2000);
         }, 600);
     };
+    handlePrintRef.current = handlePrint;
 
     const handleWhatsAppCopy = () => {
         const total = taxes.reduce((sum, r) => sum + parseNumBR(r.value), 0);
@@ -1454,6 +1483,10 @@ const App = () => {
 
         const text = `Olá! Segue a apuração fiscal referente ao mês de *${clientData.competenceShort || '—'}*:\n\n${list}\n\nTOTAL A PAGAR: ${formatCurrency(total)}`;
 
+        if (!navigator.clipboard) {
+            setToast({ message: 'Navegador sem suporte a copiar — use HTTPS ou copie manualmente', type: 'warning' });
+            return;
+        }
         navigator.clipboard.writeText(text).then(() => {
             setToast({ message: 'Resumo copiado!', type: 'success' });
         }).catch(() => {
@@ -1515,7 +1548,8 @@ const App = () => {
                 </div>
             </div>
 
-            <div className="py-6 px-4" key={tab}>
+            {/* Sem key={tab}: trocar de aba não pode remontar o editor (perderia estado digitado) */}
+            <div className="py-6 px-4">
                 <div className="tab-content">
                     {tab === 'edit' ? (
                         <EditorPanel
