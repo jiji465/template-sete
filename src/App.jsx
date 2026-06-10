@@ -1140,7 +1140,7 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
                         return (
                             <div className={card + ' mb-4 avoid-break'} style={cardPad}>
                                 <SectionTitle right="notas emitidas · últimos 12 meses">Evolução do faturamento</SectionTitle>
-                                <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 118, borderBottom: '1.5px solid #e9e6dd', paddingTop: 6 }}>
+                                <div className="evo-chart" style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 118, borderBottom: '1.5px solid #e9e6dd', paddingTop: 6 }}>
                                     {ev.map((p, i) => (
                                         <div key={i} title={`${p.ym}: ${formatCurrency(p.receita)}`} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
                                             <div style={{ fontSize: 7, lineHeight: 1, color: i === ev.length - 1 ? '#b06f06' : '#646d7c', fontWeight: 700, marginBottom: 3, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{fmtMil(p.receita)}</div>
@@ -1352,7 +1352,8 @@ const LoadingOverlay = () => (
 
 
 const App = () => {
-    const [tab, setTab] = useState('edit');
+    // ?view=preview abre direto na visualização (links e verificação automatizada)
+    const [tab, setTab] = useState(() => new URLSearchParams(window.location.search).get('view') === 'preview' ? 'preview' : 'edit');
     const [toast, setToast] = useState(null);
     const [loading, setLoading] = useState(false);
     const [validationErrors, setValidationErrors] = useState({});
