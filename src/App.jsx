@@ -6,12 +6,16 @@ import {
     Calendar, FileText, Phone, Mail, AlertTriangle, ArrowRight, CheckCircle2, XCircle,
     MessageSquare
 } from 'lucide-react';
-import iconeUrl from './assets/icone.png';
 import {
     DEFAULT_TAXES, DEFAULT_TAXES_LP, DEFAULT_TAXES_MEI_AMBOS, DEFAULT_TAXES_MEI_COMERCIO, DEFAULT_TAXES_MEI_SERVICOS, DEFAULT_TAXES_SN_COMERCIO, DEFAULT_TAXES_SN_SERVICOS, GLOSSARY, MONTHS, OFFICE_NAME, STORAGE_KEY, autoFillTaxes, calcAliquotaEfetivaSN, calcComercioLP, calcFatorR, calculateTotalRevenue, extractPdfText, formatBRLDisplay, formatCNPJ, formatCurrency, formatPercent, getAnexoEfetivo, getDueDate, isSujeitoFatorR, lpDefaults, parseNumBR, parsePGDASD, pgNum
 } from './lib/engine.js';
 
-const BRAND_ICON = iconeUrl;
+const BrandIcon = () => (
+    <svg viewBox="0 0 80.7 103.3" fill="#F79C04" fillRule="evenodd" role="img" aria-label="SETE" style={{ height: 46, width: 'auto', display: 'block', flexShrink: 0 }}>
+        <path d="M47.06 64.0 C46.87 63.83 49.08 60.12 49.35 59.42 C53.43 48.72 51.97 37.5 45.31 28.27 C46.82 28.83 48.15 29.69 49.45 30.62 C57.78 36.55 59.91 48.35 54.89 57.22 C54.17 58.5 48.53 65.29 47.06 64.0 M31.74 59.42 C32.01 60.12 34.23 63.83 34.04 64.0 C32.56 65.29 26.93 58.5 26.2 57.22 C21.18 48.35 23.32 36.55 31.64 30.62 C32.94 29.69 34.28 28.83 35.78 28.27 C29.12 37.5 27.66 48.72 31.74 59.42 M48.32 28.0 L48.4 27.1 C48.47 26.21 48.11 25.34 47.43 24.77 L40.55 24.77 L40.54 24.77 L33.66 24.77 C32.98 25.34 32.62 26.21 32.7 27.1 L32.78 28.0 C19.27 34.53 17.29 52.07 27.67 62.5 C28.3 63.14 31.53 65.05 31.67 65.25 C32.12 65.87 31.8 67.76 32.29 68.63 C32.36 68.76 34.27 70.69 34.4 70.76 C35.15 71.2 37.27 71.65 37.55 70.37 C37.6 70.09 37.54 64.97 37.5 64.69 C37.4 64.17 35.45 61.47 35.1 60.56 C30.81 49.45 31.27 38.15 38.66 28.52 L39.16 64.01 L40.54 64.01 L40.55 64.01 L40.55 64.01 L41.94 64.01 L42.44 28.52 C49.83 38.15 50.28 49.45 45.99 60.56 C45.64 61.47 43.69 64.17 43.6 64.69 C43.55 64.97 43.49 70.09 43.55 70.37 C43.83 71.65 45.95 71.2 46.69 70.76 C46.82 70.69 48.73 68.76 48.81 68.63 C49.3 67.76 48.98 65.87 49.43 65.25 C49.57 65.05 52.79 63.14 53.43 62.5 C63.81 52.07 61.82 34.53 48.32 28.0" />
+        <path d="M76.3 73.51 C75.69 78.23 71.24 81.29 67.05 82.5 C69.66 80.22 71.9 77.41 73.16 74.15 C74.9 57.0 73.14 39.41 73.79 22.16 C73.81 21.83 73.84 19.91 73.91 19.82 C74.09 19.6 74.56 20.28 74.64 20.35 C75.27 20.88 76.31 21.69 76.4 22.51 L76.3 73.51 M52.06 91.7 C48.42 94.31 44.48 96.39 40.78 98.99 C40.72 98.95 40.65 98.91 40.58 98.87 L40.58 98.86 C40.58 98.86 40.57 98.86 40.57 98.86 C40.57 98.86 40.57 98.86 40.57 98.86 L40.57 98.87 C40.5 98.91 40.43 98.95 40.36 98.99 C36.67 96.39 32.73 94.31 29.09 91.7 C22.64 87.08 10.53 78.28 9.97 69.99 L9.99 17.62 L15.13 14.1 L15.01 69.18 C15.44 77.68 18.58 82.18 26.2 85.67 C27.97 86.48 30.69 87.02 32.19 87.78 C33.11 88.24 37.79 92.59 38.99 93.63 C39.15 93.77 40.33 95.2 40.46 95.21 C40.48 95.21 40.52 95.18 40.57 95.14 C40.63 95.18 40.67 95.21 40.68 95.21 C40.81 95.2 42.0 93.77 42.15 93.63 C43.36 92.59 48.04 88.24 48.96 87.78 C50.46 87.02 53.18 86.48 54.95 85.67 C62.57 82.18 65.7 77.68 66.14 69.18 L66.02 14.1 L71.16 17.62 L71.17 69.99 C70.61 78.28 58.51 87.08 52.06 91.7 M4.85 73.51 L4.74 22.51 C4.83 21.69 5.88 20.88 6.5 20.35 C6.59 20.28 7.06 19.6 7.23 19.82 C7.31 19.91 7.34 21.83 7.35 22.16 C8.0 39.41 6.25 57.0 7.98 74.15 C9.25 77.41 11.49 80.22 14.1 82.5 C9.91 81.29 5.46 78.23 4.85 73.51 M17.8 12.5 C22.69 10.02 27.8 7.86 33.08 6.38 C34.74 5.91 38.94 4.72 40.46 4.71 C40.5 4.71 40.53 4.71 40.57 4.72 C40.57 4.72 40.57 4.72 40.57 4.72 C40.57 4.72 40.58 4.72 40.58 4.72 C40.61 4.71 40.65 4.71 40.68 4.71 C42.21 4.72 46.4 5.91 48.06 6.38 C53.35 7.86 58.46 10.02 63.34 12.5 L63.39 70.21 C63.19 73.17 62.14 76.6 60.25 78.91 C56.48 83.55 51.72 83.2 47.57 85.59 C46.53 86.19 44.21 88.82 43.09 89.78 C42.76 90.07 40.84 91.77 40.57 91.78 C40.31 91.77 38.39 90.07 38.05 89.78 C36.94 88.82 34.62 86.19 33.57 85.59 C29.43 83.2 24.67 83.55 20.89 78.91 C19.01 76.6 17.96 73.17 17.75 70.21 L17.8 12.5 M79.05 21.14 C78.86 20.12 70.18 13.66 68.82 12.79 C62.8 8.88 55.66 5.94 48.75 3.98 C47.06 3.5 42.36 2.14 40.58 2.1 L40.58 2.09 C40.58 2.09 40.57 2.1 40.57 2.1 C40.57 2.1 40.57 2.09 40.57 2.09 L40.57 2.1 C38.79 2.14 34.09 3.5 32.4 3.98 C25.48 5.94 18.35 8.88 12.32 12.79 C10.97 13.66 2.29 20.12 2.1 21.14 L2.08 73.42 C2.2 78.74 7.74 82.94 12.25 84.75 C14.17 85.53 17.12 85.83 18.71 86.65 C19.8 87.22 21.61 89.18 22.72 90.01 C27.2 93.36 34.57 98.97 39.5 101.2 C39.85 101.35 40.18 101.59 40.57 101.61 L40.57 101.61 C40.57 101.61 40.57 101.61 40.57 101.61 C40.57 101.61 40.58 101.61 40.58 101.61 L40.58 101.61 C40.96 101.59 41.3 101.35 41.65 101.2 C46.57 98.97 53.95 93.36 58.43 90.01 C59.54 89.18 61.35 87.22 62.44 86.65 C64.03 85.83 66.97 85.53 68.9 84.75 C73.41 82.94 78.94 78.74 79.07 73.42 L79.05 21.14" />
+    </svg>
+);
 
 const FatorRDashboard = ({ clientData, isPrint = false }) => {
     const rbt12 = parseNumBR(clientData.rbt12);
@@ -998,15 +1002,15 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
     const totL = { padding: '8px 0 0', borderTop: '2px solid #001D3D', fontWeight: 700 };
     const totR = { padding: '8px 0 0', borderTop: '2px solid #001D3D', fontWeight: 700, textAlign: 'right', fontVariantNumeric: 'tabular-nums' };
     const rowBorder = { borderBottom: '1px solid #e9e6dd' };
-    const thL = { textAlign: 'left', fontSize: '8.5px', textTransform: 'uppercase', letterSpacing: '.5px', color: '#9aa2af', fontWeight: 700, padding: '0 0 6px', borderBottom: '1px solid #e9e6dd' };
+    const thL = { textAlign: 'left', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '.5px', color: '#7c8595', fontWeight: 700, padding: '0 0 6px', borderBottom: '1px solid #e9e6dd' };
     const thR = { ...thL, textAlign: 'right' };
 
     const Lock = () => (
         <div className="flex items-center gap-3">
-            <img src={BRAND_ICON} alt="SETE" style={{ height: 46 }} />
+            <BrandIcon />
             <div>
                 <div style={{ fontFamily: "'Wildest', serif", fontWeight: 400, fontSize: 32, letterSpacing: '1.5px', lineHeight: .9, background: 'linear-gradient(178deg,#ffe9a8,#F79C04 52%,#a8690a)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>SETE</div>
-                <div style={{ textTransform: 'uppercase', letterSpacing: '2.4px', fontSize: '8.5px', color: '#e6c884', fontWeight: 600, marginTop: 4 }}>Soluções Empresariais</div>
+                <div style={{ textTransform: 'uppercase', letterSpacing: '2.4px', fontSize: '9px', color: '#e6c884', fontWeight: 600, marginTop: 4 }}>Soluções Empresariais</div>
             </div>
         </div>
     );
@@ -1042,7 +1046,7 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
         <div className="flex items-center gap-2 mb-3 sec-ttl" style={{ textTransform: 'uppercase', letterSpacing: '1.5px', fontSize: '10px', color: '#b06f06', fontWeight: 700 }}>
             <span style={{ width: 14, height: 2, background: '#F79C04', display: 'inline-block' }}></span>
             <span>{children}</span>
-            {right && <span className="ml-auto" style={{ color: '#9aa2af', fontWeight: 500, letterSpacing: '.3px', textTransform: 'none', fontSize: '9.5px' }}>{right}</span>}
+            {right && <span className="ml-auto" style={{ color: '#7c8595', fontWeight: 500, letterSpacing: '.3px', textTransform: 'none', fontSize: '9.5px' }}>{right}</span>}
         </div>
     );
 
@@ -1084,13 +1088,13 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
             <div className={card + ' mb-4 avoid-break'} style={cardPad}>
                 <SectionTitle right={`${MONTHS[mo.month - 1]}/${mo.year} · ${flat.length} guia${flat.length > 1 ? 's' : ''}`}>Calendário de vencimentos</SectionTitle>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 5, marginBottom: 5 }}>
-                    {WD.map((w, i) => <div key={i} style={{ textAlign: 'center', fontSize: '9px', fontWeight: 700, letterSpacing: '.5px', textTransform: 'uppercase', color: '#9aa2af' }}>{w}</div>)}
+                    {WD.map((w, i) => <div key={i} style={{ textAlign: 'center', fontSize: '9px', fontWeight: 700, letterSpacing: '.5px', textTransform: 'uppercase', color: '#7c8595' }}>{w}</div>)}
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 5 }}>
                     {cells.map((d, i) => {
                         if (d === null) return <div key={i}></div>;
                         const items = mo.days[d];
-                        if (!items) return <div key={i} className="cal-day" style={{ minHeight: 52, border: '1px solid #eef0f3', borderRadius: 8, padding: '5px 6px', background: '#fafbfc' }}><span style={{ fontSize: '11px', fontWeight: 700, color: '#9aa2af' }}>{d}</span></div>;
+                        if (!items) return <div key={i} className="cal-day" style={{ minHeight: 52, border: '1px solid #eef0f3', borderRadius: 8, padding: '5px 6px', background: '#fafbfc' }}><span style={{ fontSize: '11px', fontWeight: 700, color: '#7c8595' }}>{d}</span></div>;
                         const sub = items.reduce((s, t) => s + parseNum(t.value), 0);
                         const due = new Date(mo.year, mo.month - 1, d); const diff = Math.ceil((due - hoje) / 86400000);
                         const alert = diff <= 5;
@@ -1250,7 +1254,7 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
                             { l: isSN ? 'Anexo / Faixa' : 'Atividade', v: (isSN ? anexoEfetivo : clientData.atividade) || '—' },
                         ].map((it, i) => (
                             <div key={i} className="flex-1" style={i ? { borderLeft: '1px solid #e9e6dd', paddingLeft: 18 } : {}}>
-                                <div style={{ textTransform: 'uppercase', letterSpacing: '1px', fontSize: '9px', color: '#9aa2af', fontWeight: 700 }}>{it.l}</div>
+                                <div style={{ textTransform: 'uppercase', letterSpacing: '1px', fontSize: '9px', color: '#7c8595', fontWeight: 700 }}>{it.l}</div>
                                 <div style={{ fontSize: '12px', fontWeight: 600, marginTop: 3 }}>{it.v}</div>
                             </div>
                         ))}
@@ -1290,7 +1294,7 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
                                         {taxRows.map((t, i) => (
                                             <tr key={i}>
                                                 <td style={{ ...cellL, ...(i < taxRows.length - 1 ? rowBorder : {}) }}>
-                                                    {t.tax}{t.rate && parseNum(t.rate) > 0 ? <span style={{ color: '#9aa2af', fontWeight: 500 }}> · {String(t.rate).replace('.', ',')}%</span> : null}
+                                                    {t.tax}{t.rate && parseNum(t.rate) > 0 ? <span style={{ color: '#7c8595', fontWeight: 500 }}> · {String(t.rate).replace('.', ',')}%</span> : null}
                                                 </td>
                                                 <td style={{ ...cellR, ...(i < taxRows.length - 1 ? rowBorder : {}) }}>{formatCurrency(parseNum(t.value))}</td>
                                             </tr>
@@ -1331,9 +1335,9 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
                                             const bd = i < taxRows.length - 1 ? rowBorder : {};
                                             return (
                                                 <tr key={i}>
-                                                    <td style={{ ...cellL, ...bd }}>{t.tax}{t.rate && parseNum(t.rate) > 0 ? <span style={{ color: '#9aa2af', fontWeight: 500 }}> · {String(t.rate).replace('.', ',')}%</span> : null}</td>
+                                                    <td style={{ ...cellL, ...bd }}>{t.tax}{t.rate && parseNum(t.rate) > 0 ? <span style={{ color: '#7c8595', fontWeight: 500 }}> · {String(t.rate).replace('.', ',')}%</span> : null}</td>
                                                     <td style={{ ...cellR, ...bd }}>{formatCurrency(ap)}</td>
-                                                    <td style={{ ...cellR, ...bd, color: re > 0 ? '#1f7a4d' : '#9aa2af' }}>{re > 0 ? '− ' + formatCurrency(re) : '—'}</td>
+                                                    <td style={{ ...cellR, ...bd, color: re > 0 ? '#1f7a4d' : '#7c8595' }}>{re > 0 ? '− ' + formatCurrency(re) : '—'}</td>
                                                     <td style={{ ...cellR, ...bd, fontWeight: 700 }}>{formatCurrency(parseNum(t.value))}</td>
                                                 </tr>
                                             );
@@ -1423,12 +1427,12 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
                                         <div>
                                             <div className="flex justify-between items-baseline" style={{ fontSize: 11, marginBottom: 5 }}><b style={{ fontWeight: 600 }}>{economia.semLabel}</b><span style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: 13 }}>{formatCurrency(economia.semVal)}</span></div>
                                             <div style={{ height: 22, borderRadius: 6, background: '#f0f2f5', overflow: 'hidden' }}><i style={{ display: 'block', height: '100%', width: '100%', background: '#001D3D' }}></i></div>
-                                            <small style={{ fontSize: 9, color: '#9aa2af' }}>{economia.semExtra}</small>
+                                            <small style={{ fontSize: 9, color: '#7c8595' }}>{economia.semExtra}</small>
                                         </div>
                                         <div>
                                             <div className="flex justify-between items-baseline" style={{ fontSize: 11, marginBottom: 5 }}><b style={{ fontWeight: 600 }}>{economia.comLabel}</b><span style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums', fontSize: 13 }}>{formatCurrency(economia.comVal)}</span></div>
                                             <div style={{ height: 22, borderRadius: 6, background: '#f0f2f5', overflow: 'hidden' }}><i style={{ display: 'block', height: '100%', width: (economia.semVal > 0 ? Math.max(6, economia.comVal / economia.semVal * 100) : 100) + '%', background: 'linear-gradient(90deg,#F79C04,#d4830a)' }}></i></div>
-                                            <small style={{ fontSize: 9, color: '#9aa2af' }}>{economia.comExtra}</small>
+                                            <small style={{ fontSize: 9, color: '#7c8595' }}>{economia.comExtra}</small>
                                         </div>
                                     </div>
                                 </div>
