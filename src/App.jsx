@@ -571,7 +571,7 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
                                         placeholder="0,00" />
                                 </div>
                                 <div>
-                                    <label className="field-label">Total de Entradas — Compras (R$)</label>
+                                    <label className="field-label">Entradas — Mercadorias recebidas (crédito de ICMS) (R$)</label>
                                     <input className="field-input" type="text" value={clientData.entradasCompras || ''}
                                         onChange={e => updateClient('entradasCompras', parseBRL(e.target.value))} placeholder="0,00" />
                                 </div>
@@ -599,10 +599,8 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
                             <p className="text-[10px] text-slate-400 mt-2">Antecipação Parcial e DIFAL não são calculados aqui — informe o valor a recolher direto na linha do tributo, na tabela abaixo (quando houver).</p>
                             {(() => {
                                 const mov = calcComercioLP(clientData, totalRevenue);
-                                const margem = totalRevenue - mov.entradas;
-                                const margemPct = totalRevenue > 0 ? margem / totalRevenue * 100 : 0;
                                 return (
-                                    <div className="mt-3 bg-slate-50 p-3 rounded-lg border border-slate-200 grid grid-cols-4 gap-3 text-center">
+                                    <div className="mt-3 bg-slate-50 p-3 rounded-lg border border-slate-200 grid grid-cols-3 gap-3 text-center">
                                         <div>
                                             <p className="text-[9px] text-slate-500 font-bold uppercase">ICMS Débito − Crédito</p>
                                             <p className="text-sm font-bold text-slate-700">{mov.icms ? `${formatCurrency(mov.icms.debito)} − ${formatCurrency(mov.icms.credito)}` : '—'}</p>
@@ -614,10 +612,6 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
                                         <div>
                                             <p className="text-[9px] text-slate-500 font-bold uppercase">FUMACOP (2%)</p>
                                             <p className="text-sm font-bold text-slate-700">{mov.fumacop > 0 ? formatCurrency(mov.fumacop) : '—'}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-[9px] text-slate-500 font-bold uppercase">Margem bruta</p>
-                                            <p className={`text-sm font-extrabold ${margem < 0 ? 'text-red-600' : 'text-emerald-600'}`}>{formatCurrency(margem)} · {margemPct.toFixed(1).replace('.', ',')}%</p>
                                         </div>
                                     </div>
                                 );
@@ -1238,36 +1232,31 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
                         </>
                     )}
 
-                    {movRep && (movRep.entradas > 0 || movRep.icms) && (() => {
-                        const margem = revenue - movRep.entradas;
-                        const margemPct = revenue > 0 ? margem / revenue * 100 : 0;
-                        const mx = Math.max(revenue, movRep.entradas, 1);
-                        const MovBar = ({ label, val, color }) => (
-                            <div style={{ marginBottom: 7 }}>
-                                <div className="flex justify-between items-baseline" style={{ fontSize: '10.5px', marginBottom: 3 }}><b style={{ fontWeight: 600 }}>{label}</b><span style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(val)}</span></div>
+                    {movRep && movRep.icms && (() => {
+                        const ic = movRep.icms;
+                        const saldoCredor = ic.saldoCredor > 0;
+                        const resultado = saldoCredor ? ic.saldoCredor : ic.aPagar;
+                        const mx = Math.max(ic.debito, ic.credito, 1);
+                        const MovBar = ({ label, sub, val, color }) => (
+                            <div style={{ marginBottom: 8 }}>
+                                <div className="flex justify-between items-baseline" style={{ fontSize: '10.5px', marginBottom: 3 }}><b style={{ fontWeight: 600 }}>{label} <span style={{ fontWeight: 500, color: '#9aa2af' }}>{sub}</span></b><span style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(val)}</span></div>
                                 <div style={{ height: 16, borderRadius: 5, background: '#f0f2f5', overflow: 'hidden' }}><i style={{ display: 'block', height: '100%', width: Math.max(2, val / mx * 100) + '%', background: color }}></i></div>
                             </div>
                         );
                         return (
                             <div className={card + ' mb-4 avoid-break'} style={cardPad}>
-                                <SectionTitle right="movimentação do mês">Entradas × Saídas</SectionTitle>
+                                <SectionTitle right="apuração do mês">ICMS — débito × crédito</SectionTitle>
                                 <div className="flex gap-4">
                                     <div className="flex-1">
-                                        <MovBar label="Saídas (vendas)" val={revenue} color="linear-gradient(90deg,#F79C04,#d4830a)" />
-                                        <MovBar label="Entradas (compras)" val={movRep.entradas} color="#001D3D" />
+                                        <MovBar label="Débito" sub={`saídas × ${String(ic.aliqS).replace('.', ',')}%`} val={ic.debito} color="#001D3D" />
+                                        <MovBar label="Crédito" sub={ic.saldoAnterior > 0 ? 'entradas + saldo anterior' : 'entradas'} val={ic.credito} color="linear-gradient(90deg,#F79C04,#d4830a)" />
                                     </div>
-                                    <div style={{ flex: '0 0 175px', borderLeft: '1px solid #e9e6dd', paddingLeft: 14, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                                        <div style={{ textTransform: 'uppercase', letterSpacing: '1px', fontSize: '9px', color: '#9aa2af', fontWeight: 700 }}>Margem bruta</div>
-                                        <div style={{ fontWeight: 800, fontSize: 20, lineHeight: 1.1, color: margem < 0 ? '#b5402b' : '#1f7a4d' }}>{margemPct.toFixed(1).replace('.', ',')}%</div>
-                                        <div style={{ fontSize: '9.5px', color: '#646d7c', marginTop: 3 }}>{formatCurrency(margem)} {margem < 0 ? '· entradas acima das saídas' : 'de resultado bruto'}</div>
+                                    <div style={{ flex: '0 0 185px', borderLeft: '1px solid #e9e6dd', paddingLeft: 14, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                                        <div style={{ textTransform: 'uppercase', letterSpacing: '1px', fontSize: '9px', color: '#9aa2af', fontWeight: 700 }}>{saldoCredor ? 'Saldo credor' : 'ICMS a recolher'}</div>
+                                        <div style={{ fontWeight: 800, fontSize: 22, lineHeight: 1.1, color: saldoCredor ? '#1f7a4d' : '#001D3D' }}>{formatCurrency(resultado)}</div>
+                                        <div style={{ fontSize: '9.5px', color: '#646d7c', marginTop: 3 }}>{saldoCredor ? 'crédito transportado p/ a próxima competência' : 'débito − créditos do período'}</div>
                                     </div>
                                 </div>
-                                {movRep.icms && (
-                                    <div style={{ marginTop: 10, paddingTop: 9, borderTop: '1px dashed #e9e6dd', fontSize: '10.5px', color: '#646d7c', display: 'flex', justifyContent: 'space-between' }}>
-                                        <span>ICMS do período: débito {formatCurrency(movRep.icms.debito)} − créditos {formatCurrency(movRep.icms.credito)}</span>
-                                        <b style={{ color: movRep.icms.saldoCredor > 0 ? '#1f7a4d' : '#001D3D' }}>{movRep.icms.saldoCredor > 0 ? 'saldo credor de ' + formatCurrency(movRep.icms.saldoCredor) : 'a recolher ' + formatCurrency(movRep.icms.aPagar)}</b>
-                                    </div>
-                                )}
                             </div>
                         );
                     })()}
