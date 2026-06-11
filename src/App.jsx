@@ -1114,6 +1114,119 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
         );
     };
 
+    // ===== Auto-paginação: estima a altura impressa (mm) e divide em mais páginas quando não cabe =====
+    const PAGE_BUDGET_MM = 252; // conteúdo útil de uma folha após o cabeçalho da seção
+    const estCalMM = (mo) => {
+        const first = new Date(mo.year, mo.month - 1, 1).getDay();
+        const ndays = new Date(mo.year, mo.month, 0).getDate();
+        const weeks = Math.ceil((first + ndays) / 7);
+        let h = 35; // título + dias da semana + legenda/total + paddings
+        for (let w = 0; w < weeks; w++) {
+            let cell = 12;
+            for (let d = 1; d <= ndays; d++) {
+                if (Math.floor((first + d - 1) / 7) !== w) continue;
+                const items = mo.days[d];
+                if (items) cell = Math.max(cell, 8 + Math.ceil(items.length / 1.7) * 3.7 + 3.5);
+            }
+            h += cell;
+        }
+        return h;
+    };
+    const estTabelaGuiasMM = 14 + withDue.length * 6.6 + 7;
+    const vencSplit = venciMonths.length > 0 && (estCalMM(venciMonths[0]) + 32 + estTabelaGuiasMM + 10 > PAGE_BUDGET_MM);
+
+    // Indicadores e detalhamento calculados uma vez (usados na página única ou divididos em duas)
+    let vencIndicadores = null, vencDetalhamento = null;
+    if (withDue.length > 0) {
+        const parseDMY = s => { const p = s.split('/'); return new Date(+p[2], +p[1] - 1, +p[0]); };
+        const sortedG = [...withDue].sort((a, b) => parseDMY(a.dueDate) - parseDMY(b.dueDate));
+        const hojeG = new Date(); hojeG.setHours(0, 0, 0, 0);
+        const prox = sortedG.find(t => parseDMY(t.dueDate) >= hojeG) || sortedG[0];
+        const proxItens = sortedG.filter(t => t.dueDate === prox.dueDate);
+        const proxVal = proxItens.reduce((s, t) => s + parseNum(t.value), 0);
+        const datas = new Set(withDue.map(t => t.dueDate)).size;
+        const maior = sortedG.reduce((m, t) => parseNum(t.value) > parseNum(m.value) ? t : m, sortedG[0]);
+        const fmtD = s => { const p = s.split('/'); return p[0] + ' ' + MES_ABBR[(+p[1] || 1) - 1]; };
+        const diff = Math.ceil((parseDMY(prox.dueDate) - hojeG) / 86400000);
+        const prazo = diff < 0 ? 'vencido' : diff === 0 ? 'vence hoje' : 'vence em ' + diff + ' dia' + (diff > 1 ? 's' : '');
+        const kl = { textTransform: 'uppercase', letterSpacing: '1px', fontSize: '9.5px', fontWeight: 600 };
+        vencIndicadores = (
+            <div className="grid grid-cols-3 gap-3 mb-4 avoid-break">
+                <div className="rounded-2xl" style={{ padding: 15, background: '#001D3D', color: '#fff' }}>
+                    <div style={{ ...kl, opacity: .85 }}>Proximo vencimento</div>
+                    <div style={{ fontWeight: 800, fontSize: '18px', marginTop: 6 }}>{fmtD(prox.dueDate)}</div>
+                    <div style={{ fontSize: '9.5px', marginTop: 6, opacity: .85 }}>{proxItens.map(t => t.tax).join(', ')} - {formatCurrency(proxVal)} - {prazo}</div>
+                </div>
+                <div className="rounded-2xl" style={{ padding: 15, background: 'linear-gradient(160deg,#F79C04,#d4830a)', color: '#fff' }}>
+                    <div style={{ ...kl, opacity: .9 }}>Total a recolher</div>
+                    <div style={{ fontWeight: 800, fontSize: '18px', marginTop: 6 }}>{formatCurrency(totalDue)}</div>
+                    <div style={{ fontSize: '9.5px', marginTop: 6, opacity: .9 }}>{withDue.length} guia{withDue.length > 1 ? 's' : ''} em {datas} data{datas > 1 ? 's' : ''}</div>
+                </div>
+                <div className="rounded-2xl" style={{ padding: 15, background: '#fff', border: '1px solid #e2e8f0' }}>
+                    <div style={{ ...kl, color: '#646d7c' }}>Maior guia</div>
+                    <div style={{ fontWeight: 800, fontSize: '18px', marginTop: 6, color: '#1a2230' }}>{formatCurrency(parseNum(maior.value))}</div>
+                    <div style={{ fontSize: '9.5px', marginTop: 6, color: '#646d7c' }}>{maior.tax} - {fmtD(maior.dueDate)}</div>
+                </div>
+            </div>
+        );
+        vencDetalhamento = (
+            <div className={card} style={cardPad}>
+                <SectionTitle right={`${withDue.length} guia${withDue.length > 1 ? 's' : ''}`}>Detalhamento das guias</SectionTitle>
+                <table className="w-full" style={{ fontSize: '11px', borderCollapse: 'collapse' }}>
+                    <tbody>
+                        {sortedG.map((t, i) => {
+                            const bd = i < sortedG.length - 1 ? rowBorder : {};
+                            return (
+                                <tr key={i}>
+                                    <td style={{ ...cellL, ...bd, width: 64, fontWeight: 700 }}>{fmtD(t.dueDate)}</td>
+                                    <td style={{ ...cellL, ...bd, color: '#646d7c' }}>{t.tax}</td>
+                                    <td style={{ ...cellR, ...bd }}>{formatCurrency(parseNum(t.value))}</td>
+                                </tr>
+                            );
+                        })}
+                        <tr><td style={totL} colSpan="2">Total a recolher</td><td style={totR}>{formatCurrency(totalDue)}</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        );
+    }
+
+    // Gráfico de evolução vira página própria quando o Resumo (muitos tributos) não comporta os dois
+    const evolucaoCard = (Array.isArray(clientData.evolucao) && clientData.evolucao.some(p => p.receita > 0)) ? (() => {
+        const ev = clientData.evolucao;
+        const fmtMil = (v) => v <= 0 ? '' : (v >= 1000 ? (v / 1000).toFixed(1).replace('.', ',') + 'k' : Math.round(v).toString());
+        const mx = Math.max(...ev.map(p => p.receita), 1);
+        const media = ev.reduce((s, p) => s + p.receita, 0) / ev.length;
+        const ult = ev[ev.length - 1].receita, pen = ev.length > 1 ? ev[ev.length - 2].receita : 0;
+        const varPct = pen > 0 ? ((ult - pen) / pen * 100) : null;
+        return (
+            <div className={card + ' mb-4 avoid-break'} style={cardPad}>
+                <SectionTitle right="notas emitidas · últimos 12 meses">Evolução do faturamento</SectionTitle>
+                <div className="evo-chart" style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 118, borderBottom: '1.5px solid #e9e6dd', paddingTop: 6 }}>
+                    {ev.map((p, i) => (
+                        <div key={i} title={`${p.ym}: ${formatCurrency(p.receita)}`} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
+                            <div style={{ fontSize: 7, lineHeight: 1, color: i === ev.length - 1 ? '#b06f06' : '#646d7c', fontWeight: 700, marginBottom: 3, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{fmtMil(p.receita)}</div>
+                            <div style={{ width: '100%', maxWidth: 22, height: Math.max(p.receita / mx * 82, p.receita > 0 ? 2 : 0) + '%', background: i === ev.length - 1 ? '#F79C04' : '#001D3D', borderRadius: '3px 3px 0 0' }}></div>
+                        </div>
+                    ))}
+                </div>
+                <div style={{ display: 'flex', gap: 6, marginTop: 5 }}>
+                    {ev.map((p, i) => (
+                        <div key={i} style={{ flex: 1, textAlign: 'center', fontSize: 8, color: i === ev.length - 1 ? '#b06f06' : '#646d7c', fontWeight: i === ev.length - 1 ? 700 : 500 }}>{MES_ABBR[(parseInt(p.ym.slice(0, 2)) || 1) - 1]}</div>
+                    ))}
+                </div>
+                <div style={{ display: 'flex', gap: 14, marginTop: 9, fontSize: 10, color: '#646d7c', alignItems: 'center' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><i style={{ width: 9, height: 9, borderRadius: 2, background: '#001D3D', display: 'inline-block' }}></i> Meses anteriores</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><i style={{ width: 9, height: 9, borderRadius: 2, background: '#F79C04', display: 'inline-block' }}></i> Competência</span>
+                    <span style={{ marginLeft: 'auto', color: '#b06f06', fontWeight: 600 }}>Média {formatCurrency(media)}{varPct !== null ? ` · ${varPct >= 0 ? '▲' : '▼'} ${Math.abs(varPct).toFixed(1).replace('.', ',')}% no mês` : ''}</span>
+                </div>
+            </div>
+        );
+    })() : null;
+    const estImpostosMM = 14 + taxRows.length * 6.6 + 8;
+    const estResumoBaseMM = 26 + 15 + 21 + 12 + (hasRetentions ? 32 + estImpostosMM : Math.max(34, estImpostosMM)) + ((clientData.irpjCsllMode === 'Trimestral (Apuração)' || clientData.irpjCsllMode === 'Estimativa (Anual)') && parseNum(clientData.periodRevenue) > 0 ? 8 : 0);
+    const evolucaoSeparada = !!evolucaoCard && (estResumoBaseMM + 46 > PAGE_BUDGET_MM);
+
     return (
         <div className="max-w-[210mm] mx-auto print-wrapper">
             {/* ===== PÁGINA 1 ===== */}
@@ -1150,7 +1263,7 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
                     )}
 
                     {!hasRetentions ? (
-                        <div className="grid grid-cols-2 gap-3 mb-4 avoid-break">
+                        <div className={'grid grid-cols-2 gap-3 mb-4' + (taxRows.length > 16 ? '' : ' avoid-break')}>
                             <div className={card} style={cardPad}>
                                 <SectionTitle>Faturamento</SectionTitle>
                                 <table className="w-full" style={{ fontSize: '11.5px', borderCollapse: 'collapse' }}>
@@ -1231,42 +1344,22 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
                         </>
                     )}
 
-                    {Array.isArray(clientData.evolucao) && clientData.evolucao.some(p => p.receita > 0) && (() => {
-                        const ev = clientData.evolucao;
-                        const fmtMil = (v) => v <= 0 ? '' : (v >= 1000 ? (v / 1000).toFixed(1).replace('.', ',') + 'k' : Math.round(v).toString());
-                        const mx = Math.max(...ev.map(p => p.receita), 1);
-                        const media = ev.reduce((s, p) => s + p.receita, 0) / ev.length;
-                        const ult = ev[ev.length - 1].receita, pen = ev.length > 1 ? ev[ev.length - 2].receita : 0;
-                        const varPct = pen > 0 ? ((ult - pen) / pen * 100) : null;
-                        return (
-                            <div className={card + ' mb-4 avoid-break'} style={cardPad}>
-                                <SectionTitle right="notas emitidas · últimos 12 meses">Evolução do faturamento</SectionTitle>
-                                <div className="evo-chart" style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 118, borderBottom: '1.5px solid #e9e6dd', paddingTop: 6 }}>
-                                    {ev.map((p, i) => (
-                                        <div key={i} title={`${p.ym}: ${formatCurrency(p.receita)}`} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
-                                            <div style={{ fontSize: 7, lineHeight: 1, color: i === ev.length - 1 ? '#b06f06' : '#646d7c', fontWeight: 700, marginBottom: 3, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{fmtMil(p.receita)}</div>
-                                            <div style={{ width: '100%', maxWidth: 22, height: Math.max(p.receita / mx * 82, p.receita > 0 ? 2 : 0) + '%', background: i === ev.length - 1 ? '#F79C04' : '#001D3D', borderRadius: '3px 3px 0 0' }}></div>
-                                        </div>
-                                    ))}
-                                </div>
-                                <div style={{ display: 'flex', gap: 6, marginTop: 5 }}>
-                                    {ev.map((p, i) => (
-                                        <div key={i} style={{ flex: 1, textAlign: 'center', fontSize: 8, color: i === ev.length - 1 ? '#b06f06' : '#646d7c', fontWeight: i === ev.length - 1 ? 700 : 500 }}>{MES_ABBR[(parseInt(p.ym.slice(0, 2)) || 1) - 1]}</div>
-                                    ))}
-                                </div>
-                                <div style={{ display: 'flex', gap: 14, marginTop: 9, fontSize: 10, color: '#646d7c', alignItems: 'center' }}>
-                                    <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><i style={{ width: 9, height: 9, borderRadius: 2, background: '#001D3D', display: 'inline-block' }}></i> Meses anteriores</span>
-                                    <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><i style={{ width: 9, height: 9, borderRadius: 2, background: '#F79C04', display: 'inline-block' }}></i> Competência</span>
-                                    <span style={{ marginLeft: 'auto', color: '#b06f06', fontWeight: 600 }}>Média {formatCurrency(media)}{varPct !== null ? ` · ${varPct >= 0 ? '▲' : '▼'} ${Math.abs(varPct).toFixed(1).replace('.', ',')}% no mês` : ''}</span>
-                                </div>
-                            </div>
-                        );
-                    })()}
+                    {!evolucaoSeparada && evolucaoCard}
 
-                    
                 </div>
                 <Footer />
             </div>
+
+            {/* Evolução em página própria quando o Resumo está cheio (muitos tributos) */}
+            {evolucaoSeparada && (
+                <div className="report-preview">
+                    <div className="report-preview-body">
+                        <Header kicker="Relatório Mensal" title="Evolução do Faturamento" sub={`${clientData.clientName || 'Empresa'} · ${compLabel}`} />
+                        {evolucaoCard}
+                    </div>
+                    <Footer />
+                </div>
+            )}
 
 {/* ===== PAGINA - VENCIMENTOS ===== */}
             {withDue.length > 0 && (
@@ -1274,60 +1367,19 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
                     <div className="report-preview-body">
                         <Header kicker="Relatório Mensal" title="Vencimentos" sub={`${clientData.clientName || 'Empresa'} · ${compLabel}`} />
                         <CalMonthCard mo={venciMonths[0]} />
-                        {(() => {
-                            const parseDMY = s => { const p = s.split('/'); return new Date(+p[2], +p[1] - 1, +p[0]); };
-                            const sortedG = [...withDue].sort((a, b) => parseDMY(a.dueDate) - parseDMY(b.dueDate));
-                            const hojeG = new Date(); hojeG.setHours(0, 0, 0, 0);
-                            const prox = sortedG.find(t => parseDMY(t.dueDate) >= hojeG) || sortedG[0];
-                            const proxItens = sortedG.filter(t => t.dueDate === prox.dueDate);
-                            const proxVal = proxItens.reduce((s, t) => s + parseNum(t.value), 0);
-                            const datas = new Set(withDue.map(t => t.dueDate)).size;
-                            const maior = sortedG.reduce((m, t) => parseNum(t.value) > parseNum(m.value) ? t : m, sortedG[0]);
-                            const MA = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-                            const fmtD = s => { const p = s.split('/'); return p[0] + ' ' + MA[(+p[1] || 1) - 1]; };
-                            const diff = Math.ceil((parseDMY(prox.dueDate) - hojeG) / 86400000);
-                            const prazo = diff < 0 ? 'vencido' : diff === 0 ? 'vence hoje' : 'vence em ' + diff + ' dia' + (diff > 1 ? 's' : '');
-                            const kl = { textTransform: 'uppercase', letterSpacing: '1px', fontSize: '9.5px', fontWeight: 600 };
-                            return (
-                                <>
-                                    <div className="grid grid-cols-3 gap-3 mb-4 avoid-break">
-                                        <div className="rounded-2xl" style={{ padding: 15, background: '#001D3D', color: '#fff' }}>
-                                            <div style={{ ...kl, opacity: .85 }}>Proximo vencimento</div>
-                                            <div style={{ fontWeight: 800, fontSize: '18px', marginTop: 6 }}>{fmtD(prox.dueDate)}</div>
-                                            <div style={{ fontSize: '9.5px', marginTop: 6, opacity: .85 }}>{proxItens.map(t => t.tax).join(', ')} - {formatCurrency(proxVal)} - {prazo}</div>
-                                        </div>
-                                        <div className="rounded-2xl" style={{ padding: 15, background: 'linear-gradient(160deg,#F79C04,#d4830a)', color: '#fff' }}>
-                                            <div style={{ ...kl, opacity: .9 }}>Total a recolher</div>
-                                            <div style={{ fontWeight: 800, fontSize: '18px', marginTop: 6 }}>{formatCurrency(totalDue)}</div>
-                                            <div style={{ fontSize: '9.5px', marginTop: 6, opacity: .9 }}>{withDue.length} guia{withDue.length > 1 ? 's' : ''} em {datas} data{datas > 1 ? 's' : ''}</div>
-                                        </div>
-                                        <div className="rounded-2xl" style={{ padding: 15, background: '#fff', border: '1px solid #e2e8f0' }}>
-                                            <div style={{ ...kl, color: '#646d7c' }}>Maior guia</div>
-                                            <div style={{ fontWeight: 800, fontSize: '18px', marginTop: 6, color: '#1a2230' }}>{formatCurrency(parseNum(maior.value))}</div>
-                                            <div style={{ fontSize: '9.5px', marginTop: 6, color: '#646d7c' }}>{maior.tax} - {fmtD(maior.dueDate)}</div>
-                                        </div>
-                                    </div>
-                                    <div className={card} style={cardPad}>
-                                        <SectionTitle right={`${withDue.length} guia${withDue.length > 1 ? 's' : ''}`}>Detalhamento das guias</SectionTitle>
-                                        <table className="w-full" style={{ fontSize: '11px', borderCollapse: 'collapse' }}>
-                                            <tbody>
-                                                {sortedG.map((t, i) => {
-                                                    const bd = i < sortedG.length - 1 ? rowBorder : {};
-                                                    return (
-                                                        <tr key={i}>
-                                                            <td style={{ ...cellL, ...bd, width: 64, fontWeight: 700 }}>{fmtD(t.dueDate)}</td>
-                                                            <td style={{ ...cellL, ...bd, color: '#646d7c' }}>{t.tax}</td>
-                                                            <td style={{ ...cellR, ...bd }}>{formatCurrency(parseNum(t.value))}</td>
-                                                        </tr>
-                                                    );
-                                                })}
-                                                <tr><td style={totL} colSpan="2">Total a recolher</td><td style={totR}>{formatCurrency(totalDue)}</td></tr>
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </>
-                            );
-                        })()}
+                        {vencIndicadores}
+                        {!vencSplit && vencDetalhamento}
+                    </div>
+                    <Footer />
+                </div>
+            )}
+
+            {/* Detalhamento em página própria quando calendário + tabela não cabem juntos */}
+            {withDue.length > 0 && vencSplit && (
+                <div className="report-preview">
+                    <div className="report-preview-body">
+                        <Header kicker="Relatório Mensal" title="Vencimentos — detalhamento" sub={`${clientData.clientName || 'Empresa'} · ${compLabel}`} />
+                        {vencDetalhamento}
                     </div>
                     <Footer />
                 </div>
