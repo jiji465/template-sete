@@ -1009,7 +1009,7 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
         <div className="flex items-center gap-3">
             <BrandIcon />
             <div>
-                <div style={{ fontFamily: "'Wildest', serif", fontWeight: 400, fontSize: 32, letterSpacing: '1.5px', lineHeight: .9, background: 'linear-gradient(178deg,#ffe9a8,#F79C04 52%,#a8690a)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>SETE</div>
+                <div style={{ fontFamily: "'Wildest', serif", fontWeight: 400, fontSize: 32, letterSpacing: '1.5px', lineHeight: .9, color: '#F79C04' }}>SETE</div>
                 <div style={{ textTransform: 'uppercase', letterSpacing: '2.4px', fontSize: '9px', color: '#e6c884', fontWeight: 600, marginTop: 4 }}>Soluções Empresariais</div>
             </div>
         </div>
