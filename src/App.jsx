@@ -1132,7 +1132,8 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
         }
         return h;
     };
-    const estTabelaGuiasMM = 14 + withDue.length * 6.6 + 7;
+    const numDatasVenc = withDue.length > 0 ? new Set(withDue.map(t => t.dueDate)).size : 0;
+    const estTabelaGuiasMM = 14 + numDatasVenc * 10 + 7; // detalhamento agrupado por data (cada linha pode quebrar em 2)
     const vencSplit = venciMonths.length > 0 && (estCalMM(venciMonths[0]) + 32 + estTabelaGuiasMM + 10 > PAGE_BUDGET_MM);
 
     // Indicadores e detalhamento calculados uma vez (usados na página única ou divididos em duas)
@@ -1169,18 +1170,25 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
                 </div>
             </div>
         );
+        // Agrupa as guias por data de vencimento (sortedG já está em ordem cronológica)
+        const grupos = [];
+        sortedG.forEach(t => {
+            const last = grupos[grupos.length - 1];
+            if (last && last.dueDate === t.dueDate) { last.itens.push(t); last.total += parseNum(t.value); }
+            else grupos.push({ dueDate: t.dueDate, itens: [t], total: parseNum(t.value) });
+        });
         vencDetalhamento = (
             <div className={card} style={cardPad}>
-                <SectionTitle right={`${withDue.length} guia${withDue.length > 1 ? 's' : ''}`}>Detalhamento das guias</SectionTitle>
+                <SectionTitle right={`${grupos.length} data${grupos.length > 1 ? 's' : ''} · ${withDue.length} guia${withDue.length > 1 ? 's' : ''}`}>Detalhamento das guias</SectionTitle>
                 <table className="w-full" style={{ fontSize: '11px', borderCollapse: 'collapse' }}>
                     <tbody>
-                        {sortedG.map((t, i) => {
-                            const bd = i < sortedG.length - 1 ? rowBorder : {};
+                        {grupos.map((g, i) => {
+                            const bd = i < grupos.length - 1 ? rowBorder : {};
                             return (
                                 <tr key={i}>
-                                    <td style={{ ...cellL, ...bd, width: 64, fontWeight: 700 }}>{fmtD(t.dueDate)}</td>
-                                    <td style={{ ...cellL, ...bd, color: '#646d7c' }}>{t.tax}</td>
-                                    <td style={{ ...cellR, ...bd }}>{formatCurrency(parseNum(t.value))}</td>
+                                    <td style={{ ...cellL, ...bd, width: 64, fontWeight: 700, verticalAlign: 'top', whiteSpace: 'nowrap' }}>{fmtD(g.dueDate)}</td>
+                                    <td style={{ ...cellL, ...bd, color: '#646d7c', paddingLeft: 10, paddingRight: 10 }}>{g.itens.map(t => t.tax).join(', ')}</td>
+                                    <td style={{ ...cellR, ...bd, fontWeight: 700, verticalAlign: 'top', whiteSpace: 'nowrap' }}>{formatCurrency(g.total)}</td>
                                 </tr>
                             );
                         })}
