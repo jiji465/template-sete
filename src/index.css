@@ -26,10 +26,13 @@
             .report-preview .mb-8 { margin-bottom: 0 !important; }
             .report-preview .page-footer { margin-top: 0 !important; padding-top: 8px !important; }
             /* Compactação: relatórios densos (muitos tributos + retenção + gráfico) cabem em 1 folha */
-            .report-preview .bg-white.rounded-2xl { padding: 12px 14px !important; }
-            .report-preview .mb-4 { margin-bottom: 10px !important; }
-            .report-preview tbody td, .report-preview tfoot td, .report-preview thead th { padding-top: 4.5px !important; padding-bottom: 4.5px !important; }
-            .evo-chart { height: 96px !important; }
+            .report-preview .bg-white.rounded-2xl { padding: 11px 13px !important; }
+            .report-preview .grid > .rounded-2xl { padding: 12px 13px !important; }
+            .report-preview .mb-4 { margin-bottom: 8px !important; }
+            .report-preview tbody td, .report-preview tfoot td, .report-preview thead th { padding-top: 4px !important; padding-bottom: 4px !important; }
+            .evo-chart { height: 80px !important; }
+            .report-preview .cal-day { min-height: 44px !important; }
+            .report-preview .page-header-inner { padding: 13px 20px !important; }
             table { break-inside: auto !important; }
             tr, thead, tfoot { break-inside: avoid !important; page-break-inside: avoid !important; }
             .sec-ttl { break-after: avoid !important; page-break-after: avoid !important; }

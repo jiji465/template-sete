@@ -46,6 +46,46 @@ export const DEFAULT_TAXES_LP = [
     { id: 8, tax: "Terceiros", base: "", rate: "5,80", apurado: "", retido: "", value: "", dueDate: "", obs: "SESC, SENAC, SEBRAE, etc.", retidoManual: false },
 ];
 
+// Comércio/Indústria no LP: ICMS por débito e crédito no lugar do ISS
+export const DEFAULT_TAXES_LP_COMERCIO = [
+    { id: 1, tax: "PIS", base: "", rate: "0,65", apurado: "", retido: "", value: "", dueDate: "", obs: "Regime cumulativo", retidoManual: false },
+    { id: 2, tax: "COFINS", base: "", rate: "3,00", apurado: "", retido: "", value: "", dueDate: "", obs: "Regime cumulativo", retidoManual: false },
+    { id: 3, tax: "ICMS", base: "", rate: "", apurado: "", retido: "", value: "", dueDate: "", obs: "Apuração por débito e crédito", retidoManual: false },
+    { id: 4, tax: "IRPJ", base: "", rate: "15,00", apurado: "", retido: "", value: "", dueDate: "", obs: "Provisão mensal (Venc. Real Trimestral)", retidoManual: false },
+    { id: 5, tax: "CSLL", base: "", rate: "9,00", apurado: "", retido: "", value: "", dueDate: "", obs: "Provisão mensal (Venc. Real Trimestral)", retidoManual: false },
+    { id: 6, tax: "CPP (Patronal)", base: "", rate: "20,00", apurado: "", retido: "", value: "", dueDate: "", obs: "Contribuição previdenciária", retidoManual: false },
+    { id: 7, tax: "RAT", base: "", rate: "1,00", apurado: "", retido: "", value: "", dueDate: "", obs: "Risco Ambiental do Trabalho", retidoManual: false },
+    { id: 8, tax: "Terceiros", base: "", rate: "5,80", apurado: "", retido: "", value: "", dueDate: "", obs: "SESC, SENAC, SEBRAE, etc.", retidoManual: false },
+];
+
+export const lpDefaults = (atividade) => (atividade === 'Comércio' || atividade === 'Indústria') ? DEFAULT_TAXES_LP_COMERCIO : DEFAULT_TAXES_LP;
+
+// Apuração estadual do comércio (LP/Real): ICMS débito/crédito, antecipação parcial,
+// DIFAL e FUMACOP (adicional de 2% — Lei 8.205/2004, MA)
+export const calcComercioLP = (data, totalRevenue) => {
+    const entradas = parseNumBR(data.entradasCompras);
+    const aliqInterna = parseNumBR(data.aliqIcmsSaida);
+    const aliqERaw = parseNumBR(data.aliqIcmsEntrada);
+    const aliqE = aliqERaw > 0 ? aliqERaw : aliqInterna;
+    const saldoAnterior = parseNumBR(data.saldoCredorICMS);
+    const comprasInter = parseNumBR(data.comprasInterestaduais);
+    const aliqInter = parseNumBR(data.aliqInterestadual);
+    const baseDifal = parseNumBR(data.baseDifal);
+    const baseFumacop = parseNumBR(data.baseFumacop);
+
+    let icms = null;
+    if (totalRevenue > 0 && aliqInterna > 0) {
+        const debito = totalRevenue * aliqInterna / 100;
+        const credito = entradas * aliqE / 100 + saldoAnterior;
+        icms = { debito, credito, aliqS: aliqInterna, aliqE, saldoAnterior, aPagar: Math.max(0, debito - credito), saldoCredor: Math.max(0, credito - debito) };
+    }
+    const difAliq = Math.max(0, aliqInterna - aliqInter);
+    const antecipacao = (comprasInter > 0 && aliqInter > 0 && difAliq > 0) ? comprasInter * difAliq / 100 : 0;
+    const difal = (baseDifal > 0 && aliqInter > 0 && difAliq > 0) ? baseDifal * difAliq / 100 : 0;
+    const fumacop = baseFumacop > 0 ? baseFumacop * 0.02 : 0;
+    return { icms, antecipacao, difal, fumacop, entradas, comprasInter, baseDifal, baseFumacop, aliqInterna, aliqInter, difAliq };
+};
+
 export const DEFAULT_TAXES_SN_SERVICOS = [
     { id: 1, tax: "DAS", base: "", rate: "", apurado: "", retido: "", value: "", dueDate: "", obs: "Documento de Arrecadação do Simples", retidoManual: false },
     { id: 2, tax: "ISS (retido)", base: "", rate: "", apurado: "", retido: "", value: "", dueDate: "", obs: "ISS retido na fonte, se aplicável", retidoManual: false },
@@ -81,7 +121,10 @@ export const GLOSSARY = [
     { acronym: "INSS (Retenção)", full: "Retenção Previdenciária", icon: "Receipt", matchTaxes: ["INSS (retido)"], desc: "Retenção de INSS na fonte referente à prestação de serviços." },
     { acronym: "FGTS", full: "Fundo de Garantia do Tempo de Serviço", icon: "Landmark", matchTaxes: ["FGTS"], desc: "Depósito equivalente a 8% da remuneração de cada trabalhador na folha de salários." },
     { acronym: "DAS", full: "Documento de Arrecadação do Simples Nacional", icon: "Receipt", matchTaxes: ["DAS", "DAS-MEI"], desc: "Guia única de recolhimento do Simples Nacional que unifica diversos tributos em uma alíquota." },
-    { acronym: "ICMS", full: "Imposto sobre Circulação de Mercadorias e Serviços", icon: "Receipt", matchTaxes: ["ICMS", "ICMS (ST)", "DIFAL"], desc: "Imposto estadual sobre a circulação de mercadorias e prestação de serviços de transporte e comunicação." },
+    { acronym: "ICMS", full: "Imposto sobre Circulação de Mercadorias e Serviços", icon: "Receipt", matchTaxes: ["ICMS", "ICMS (ST)"], desc: "Imposto estadual sobre a circulação de mercadorias, apurado pelo confronto entre débitos (saídas) e créditos (entradas)." },
+    { acronym: "Antecipação Parcial", full: "ICMS antecipado nas compras interestaduais", icon: "Receipt", matchTaxes: ["Antecipação Parcial"], desc: "Diferença entre a alíquota interna e a interestadual, recolhida antecipadamente sobre o valor das mercadorias compradas de outros estados para revenda." },
+    { acronym: "DIFAL", full: "Diferencial de Alíquotas", icon: "Receipt", matchTaxes: ["DIFAL"], desc: "Diferença entre a alíquota interna e a interestadual sobre compras de outros estados destinadas a uso, consumo ou ativo imobilizado." },
+    { acronym: "FUMACOP", full: "Fundo Maranhense de Combate à Pobreza", icon: "Landmark", matchTaxes: ["FUMACOP"], desc: "Adicional de 2 pontos percentuais de ICMS sobre produtos da Lei 8.205/2004 (MA), recolhido em guia própria." },
 ];
 
 export const SN_TABLES = {
@@ -142,6 +185,7 @@ export const getDueDate = (compMonth, compYear, taxName, irpjCsllMode) => {
         'CPP': 20, 'CPP (Patronal)': 20, 'RAT': 20, 'RAT (Ajustado)': 20, 'Terceiros': 20,
         'INSS': 20, 'INSS (retido)': 20, 'INSS (Sócio)': 20, 'FGTS': 20,
         'DAS': 20, 'DAS-MEI': 20, 'ICMS (ST)': 10, 'DIFAL': 10,
+        'ICMS': 20, 'Antecipação Parcial': 20, 'FUMACOP': 20,
     };
     if (['IRPJ', 'CSLL', 'Adicional IRPJ'].includes(taxName)) {
         // Trimestral: a quota única vence no mês seguinte ao ENCERRAMENTO do trimestre (mar/jun/set/dez)
@@ -252,6 +296,10 @@ export const autoFillTaxes = (data, currentTaxes) => {
     const folhaMensal = parseNumBR(data.folhaMensal !== undefined ? data.folhaMensal : data.folha);
     const atividade = data.atividade || 'Serviços';
     const sujeitoFatorR = isSujeitoFatorR(data, folha12m);
+    const isComercioInd = atividade === 'Comércio' || atividade === 'Indústria';
+    const isLPouReal = data.regime === 'Lucro Presumido' || data.regime === 'Lucro Real';
+    const mov = (isLPouReal && isComercioInd) ? calcComercioLP(data, totalRevenue) : null;
+    const fmtPct = (n) => n.toFixed(2).replace('.', ',');
 
     return currentTaxes.map(t => {
         const updated = { ...t };
@@ -313,6 +361,40 @@ export const autoFillTaxes = (data, currentTaxes) => {
             }
         }
 
+        // ===== Estaduais do comércio (LP/Real): ICMS débito/crédito, antecipação, DIFAL, FUMACOP =====
+        if (mov) {
+            if (t.tax === 'ICMS') {
+                if (mov.icms) {
+                    updated.base = formatBRLDisplay(totalRevenue);
+                    updated.rate = fmtPct(mov.icms.aliqS);
+                    if (mov.icms.aPagar > 0) {
+                        updated.apurado = formatBRLDisplay(mov.icms.aPagar);
+                        updated.obs = `Débito ${formatBRLDisplay(mov.icms.debito)} − créditos ${formatBRLDisplay(mov.icms.credito)}`;
+                    } else {
+                        updated.apurado = "";
+                        updated.obs = mov.icms.saldoCredor > 0 ? `Saldo credor de R$ ${formatBRLDisplay(mov.icms.saldoCredor)} p/ a próxima competência` : '';
+                    }
+                } else {
+                    updated.base = ""; updated.apurado = ""; updated.obs = "Apuração por débito e crédito";
+                }
+            } else if (t.tax === 'Antecipação Parcial') {
+                updated.base = formatBRLDisplay(mov.comprasInter);
+                updated.rate = fmtPct(mov.difAliq);
+                updated.apurado = mov.antecipacao > 0 ? formatBRLDisplay(mov.antecipacao) : "";
+                updated.obs = `Compras interestaduais · ${fmtPct(mov.aliqInterna)}% − ${fmtPct(mov.aliqInter)}%`;
+            } else if (t.tax === 'DIFAL') {
+                updated.base = formatBRLDisplay(mov.baseDifal);
+                updated.rate = fmtPct(mov.difAliq);
+                updated.apurado = mov.difal > 0 ? formatBRLDisplay(mov.difal) : "";
+                updated.obs = `Uso/consumo/ativo · ${fmtPct(mov.aliqInterna)}% − ${fmtPct(mov.aliqInter)}%`;
+            } else if (t.tax === 'FUMACOP') {
+                updated.base = formatBRLDisplay(mov.baseFumacop);
+                updated.rate = "2,00";
+                updated.apurado = mov.fumacop > 0 ? formatBRLDisplay(mov.fumacop) : "";
+                updated.obs = "Adicional de 2% — Lei 8.205/2004 (MA)";
+            }
+        }
+
         if (data.regime === 'Simples Nacional') {
             if (t.tax === 'DAS') {
                 if (totalRevenue > 0 && rbt12 > 0 && data.anexo) {
@@ -353,7 +435,7 @@ export const autoFillTaxes = (data, currentTaxes) => {
         const retido = parseNumBR(updated.retido);
         // Tributos gerenciados pelo motor têm o valor recalculado/limpo; linhas customizadas
         // (nome livre, só "Valor" digitado) preservam o que o usuário digitou
-        const MANAGED = ['PIS', 'COFINS', 'PIS/COFINS', 'ISS', 'IRPJ', 'CSLL', 'Adicional IRPJ', 'CPP', 'CPP (Patronal)', 'RAT', 'RAT (Ajustado)', 'Terceiros', 'FGTS', 'DAS', 'INSS', 'INSS (Sócio)'];
+        const MANAGED = ['PIS', 'COFINS', 'PIS/COFINS', 'ISS', 'IRPJ', 'CSLL', 'Adicional IRPJ', 'CPP', 'CPP (Patronal)', 'RAT', 'RAT (Ajustado)', 'Terceiros', 'FGTS', 'DAS', 'INSS', 'INSS (Sócio)', 'ICMS', 'Antecipação Parcial', 'FUMACOP'];
         if (apurado > 0 || retido > 0) {
             updated.value = formatBRLDisplay(Math.max(0, apurado - retido));
         } else if (MANAGED.includes(t.tax)) {
