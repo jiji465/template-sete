@@ -212,32 +212,36 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
                 baseTaxes = baseTaxes.filter(t => t.tax !== 'INSS (Sócio)');
             }
 
-            // Guias estaduais do comércio (LP/Real) entram/saem conforme os campos de movimentação
+            // FUMACOP (2%) entra/sai conforme a base; Antecipação Parcial e DIFAL ficam fixos no
+            // template do comércio como valor manual.
             const isLPComercio = (data.regime === 'Lucro Presumido' || data.regime === 'Lucro Real') && (data.atividade === 'Comércio' || data.atividade === 'Indústria');
             const movC = isLPComercio ? calcComercioLP(data, calculateTotalRevenue(data)) : null;
-            [['Antecipação Parcial', movC && movC.antecipacao > 0], ['DIFAL', movC && movC.difal > 0], ['FUMACOP', movC && movC.fumacop > 0]].forEach(([nome, deve], k) => {
-                const idx = baseTaxes.findIndex(t => t.tax === nome);
-                if (deve && idx === -1) {
-                    baseTaxes = [...baseTaxes, { id: Date.now() + 100 + k, tax: nome, base: '', rate: '', apurado: '', retido: '', value: '', dueDate: '', obs: '', retidoManual: false }];
-                } else if (!deve && idx !== -1 && isLPComercio) {
-                    baseTaxes = baseTaxes.filter(t => t.tax !== nome);
-                }
-            });
+            const temFumacop = !!(movC && movC.fumacop > 0);
+            const idxFum = baseTaxes.findIndex(t => t.tax === 'FUMACOP');
+            if (temFumacop && idxFum === -1) {
+                baseTaxes = [...baseTaxes, { id: Date.now() + 101, tax: 'FUMACOP', base: '', rate: '2,00', apurado: '', retido: '', value: '', dueDate: '', obs: '', retidoManual: false }];
+            } else if (!temFumacop && idxFum !== -1 && isLPComercio) {
+                baseTaxes = baseTaxes.filter(t => t.tax !== 'FUMACOP');
+            }
 
             return autoFillTaxes(data, baseTaxes);
         });
     };
 
+    // Recalcula automaticamente quando um campo MUDA — mas NÃO ao montar/voltar de "Visualizar"
+    // (senão ajustes manuais de centavos seriam refeitos toda vez que troca de aba).
+    const jaMontou = React.useRef(false);
     React.useEffect(() => {
+        if (!jaMontou.current) { jaMontou.current = true; return; }
         recalcular();
     }, [
-        clientData.revenue, 
-        clientData.revenueRetained, 
-        clientData.revenueNonRetained, 
-        clientData.proLabore, 
-        clientData.folhaMensal, 
-        clientData.folha12m, 
-        clientData.rbt12, 
+        clientData.revenue,
+        clientData.revenueRetained,
+        clientData.revenueNonRetained,
+        clientData.proLabore,
+        clientData.folhaMensal,
+        clientData.folha12m,
+        clientData.rbt12,
         clientData.anexo,
         clientData.atividade,
         clientData.regime,
@@ -252,9 +256,6 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
         clientData.aliqIcmsSaida,
         clientData.aliqIcmsEntrada,
         clientData.saldoCredorICMS,
-        clientData.comprasInterestaduais,
-        clientData.aliqInterestadual,
-        clientData.baseDifal,
         clientData.baseFumacop
     ]);
 
@@ -411,10 +412,7 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
                                     newTaxes = [...lpDefaults(atv)];
                                     updatedData.anexo = '';
                                     updatedData.revenue = '';
-                                    if ((atv === 'Comércio' || atv === 'Indústria')) {
-                                        if (!updatedData.aliqIcmsSaida) updatedData.aliqIcmsSaida = '23,00';
-                                        if (!updatedData.aliqInterestadual) updatedData.aliqInterestadual = '7,00';
-                                    }
+                                    if ((atv === 'Comércio' || atv === 'Indústria') && !updatedData.aliqIcmsSaida) updatedData.aliqIcmsSaida = '23,00';
                                 } else if (nr === 'Simples Nacional') {
                                     newTaxes = atv === 'Comércio' ? [...DEFAULT_TAXES_SN_COMERCIO] : [...DEFAULT_TAXES_SN_SERVICOS];
                                     updatedData.revenueRetained = '';
@@ -454,10 +452,7 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
                                     } else {
                                         // LP/Real: troca o conjunto padrão (ICMS no comércio, ISS nos serviços) e pré-preenche alíquotas
                                         const upd = { ...clientData, atividade: atv };
-                                        if ((atv === 'Comércio' || atv === 'Indústria')) {
-                                            if (!upd.aliqIcmsSaida) upd.aliqIcmsSaida = '23,00';
-                                            if (!upd.aliqInterestadual) upd.aliqInterestadual = '7,00';
-                                        }
+                                        if ((atv === 'Comércio' || atv === 'Indústria') && !upd.aliqIcmsSaida) upd.aliqIcmsSaida = '23,00';
                                         setClientData(upd);
                                         setTaxes(autoFillTaxes(upd, lpDefaults(atv).map((t, i) => ({ ...t, id: Date.now() + i }))));
                                     }
@@ -600,22 +595,8 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
                                     <input className="field-input" type="text" value={clientData.baseFumacop || ''}
                                         onChange={e => updateClient('baseFumacop', parseBRL(e.target.value))} placeholder="0,00" />
                                 </div>
-                                <div>
-                                    <label className="field-label">Compras interestaduais — p/ Antecipação Parcial (R$)</label>
-                                    <input className="field-input" type="text" value={clientData.comprasInterestaduais || ''}
-                                        onChange={e => updateClient('comprasInterestaduais', parseBRL(e.target.value))} placeholder="0,00" />
-                                </div>
-                                <div>
-                                    <label className="field-label">Alíq. interestadual (%) — 4, 7 ou 12</label>
-                                    <input className="field-input" type="text" value={clientData.aliqInterestadual || ''}
-                                        onChange={e => updateClient('aliqInterestadual', e.target.value.replace(/\./g, ',').replace(/[^\d,]/g, ''))} placeholder="7,00" />
-                                </div>
-                                <div className="col-span-2">
-                                    <label className="field-label">Base DIFAL — uso, consumo ou ativo (R$)</label>
-                                    <input className="field-input" type="text" value={clientData.baseDifal || ''}
-                                        onChange={e => updateClient('baseDifal', parseBRL(e.target.value))} placeholder="0,00" />
-                                </div>
                             </div>
+                            <p className="text-[10px] text-slate-400 mt-2">Antecipação Parcial e DIFAL não são calculados aqui — informe o valor a recolher direto na linha do tributo, na tabela abaixo (quando houver).</p>
                             {(() => {
                                 const mov = calcComercioLP(clientData, totalRevenue);
                                 const margem = totalRevenue - mov.entradas;
@@ -631,8 +612,8 @@ const EditorPanel = ({ clientData, setClientData, taxes, setTaxes, validationErr
                                             <p className={`text-sm font-extrabold ${mov.icms && mov.icms.saldoCredor > 0 ? 'text-emerald-600' : 'text-navy'}`}>{mov.icms ? formatCurrency(mov.icms.saldoCredor > 0 ? mov.icms.saldoCredor : mov.icms.aPagar) : '—'}</p>
                                         </div>
                                         <div>
-                                            <p className="text-[9px] text-slate-500 font-bold uppercase">Antecip. + DIFAL + FUMACOP</p>
-                                            <p className="text-sm font-bold text-slate-700">{formatCurrency(mov.antecipacao + mov.difal + mov.fumacop)}</p>
+                                            <p className="text-[9px] text-slate-500 font-bold uppercase">FUMACOP (2%)</p>
+                                            <p className="text-sm font-bold text-slate-700">{mov.fumacop > 0 ? formatCurrency(mov.fumacop) : '—'}</p>
                                         </div>
                                         <div>
                                             <p className="text-[9px] text-slate-500 font-bold uppercase">Margem bruta</p>

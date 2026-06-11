@@ -44,9 +44,11 @@ export const DEFAULT_TAXES_LP = [
     { id: 6, tax: "CPP (Patronal)", base: "", rate: "20,00", apurado: "", retido: "", value: "", dueDate: "", obs: "Contribuição previdenciária", retidoManual: false },
     { id: 7, tax: "RAT", base: "", rate: "1,00", apurado: "", retido: "", value: "", dueDate: "", obs: "Risco Ambiental do Trabalho", retidoManual: false },
     { id: 8, tax: "Terceiros", base: "", rate: "5,80", apurado: "", retido: "", value: "", dueDate: "", obs: "SESC, SENAC, SEBRAE, etc.", retidoManual: false },
+    { id: 9, tax: "FGTS", base: "", rate: "8,00", apurado: "", retido: "", value: "", dueDate: "", obs: "8% sobre a folha de salários", retidoManual: false },
 ];
 
-// Comércio/Indústria no LP: ICMS por débito e crédito no lugar do ISS
+// Comércio/Indústria no LP: ICMS por débito e crédito no lugar do ISS.
+// Antecipação Parcial e DIFAL ficam como linhas de valor manual (nem sempre seguem alíquota).
 export const DEFAULT_TAXES_LP_COMERCIO = [
     { id: 1, tax: "PIS", base: "", rate: "0,65", apurado: "", retido: "", value: "", dueDate: "", obs: "Regime cumulativo", retidoManual: false },
     { id: 2, tax: "COFINS", base: "", rate: "3,00", apurado: "", retido: "", value: "", dueDate: "", obs: "Regime cumulativo", retidoManual: false },
@@ -56,21 +58,21 @@ export const DEFAULT_TAXES_LP_COMERCIO = [
     { id: 6, tax: "CPP (Patronal)", base: "", rate: "20,00", apurado: "", retido: "", value: "", dueDate: "", obs: "Contribuição previdenciária", retidoManual: false },
     { id: 7, tax: "RAT", base: "", rate: "1,00", apurado: "", retido: "", value: "", dueDate: "", obs: "Risco Ambiental do Trabalho", retidoManual: false },
     { id: 8, tax: "Terceiros", base: "", rate: "5,80", apurado: "", retido: "", value: "", dueDate: "", obs: "SESC, SENAC, SEBRAE, etc.", retidoManual: false },
+    { id: 9, tax: "FGTS", base: "", rate: "8,00", apurado: "", retido: "", value: "", dueDate: "", obs: "8% sobre a folha de salários", retidoManual: false },
+    { id: 10, tax: "Antecipação Parcial", base: "", rate: "", apurado: "", retido: "", value: "", dueDate: "", obs: "Informe o valor a recolher (se houver)", retidoManual: false },
+    { id: 11, tax: "DIFAL", base: "", rate: "", apurado: "", retido: "", value: "", dueDate: "", obs: "Informe o valor a recolher (se houver)", retidoManual: false },
 ];
 
 export const lpDefaults = (atividade) => (atividade === 'Comércio' || atividade === 'Indústria') ? DEFAULT_TAXES_LP_COMERCIO : DEFAULT_TAXES_LP;
 
-// Apuração estadual do comércio (LP/Real): ICMS débito/crédito, antecipação parcial,
-// DIFAL e FUMACOP (adicional de 2% — Lei 8.205/2004, MA)
+// Apuração estadual do comércio (LP/Real): ICMS por débito/crédito e FUMACOP (2% — Lei 8.205/2004, MA).
+// Antecipação Parcial e DIFAL não são calculados aqui — entram como valor manual na tabela.
 export const calcComercioLP = (data, totalRevenue) => {
     const entradas = parseNumBR(data.entradasCompras);
     const aliqInterna = parseNumBR(data.aliqIcmsSaida);
     const aliqERaw = parseNumBR(data.aliqIcmsEntrada);
     const aliqE = aliqERaw > 0 ? aliqERaw : aliqInterna;
     const saldoAnterior = parseNumBR(data.saldoCredorICMS);
-    const comprasInter = parseNumBR(data.comprasInterestaduais);
-    const aliqInter = parseNumBR(data.aliqInterestadual);
-    const baseDifal = parseNumBR(data.baseDifal);
     const baseFumacop = parseNumBR(data.baseFumacop);
 
     let icms = null;
@@ -79,11 +81,8 @@ export const calcComercioLP = (data, totalRevenue) => {
         const credito = entradas * aliqE / 100 + saldoAnterior;
         icms = { debito, credito, aliqS: aliqInterna, aliqE, saldoAnterior, aPagar: Math.max(0, debito - credito), saldoCredor: Math.max(0, credito - debito) };
     }
-    const difAliq = Math.max(0, aliqInterna - aliqInter);
-    const antecipacao = (comprasInter > 0 && aliqInter > 0 && difAliq > 0) ? comprasInter * difAliq / 100 : 0;
-    const difal = (baseDifal > 0 && aliqInter > 0 && difAliq > 0) ? baseDifal * difAliq / 100 : 0;
     const fumacop = baseFumacop > 0 ? baseFumacop * 0.02 : 0;
-    return { icms, antecipacao, difal, fumacop, entradas, comprasInter, baseDifal, baseFumacop, aliqInterna, aliqInter, difAliq };
+    return { icms, fumacop, entradas, baseFumacop, aliqInterna };
 };
 
 export const DEFAULT_TAXES_SN_SERVICOS = [
@@ -361,7 +360,8 @@ export const autoFillTaxes = (data, currentTaxes) => {
             }
         }
 
-        // ===== Estaduais do comércio (LP/Real): ICMS débito/crédito, antecipação, DIFAL, FUMACOP =====
+        // ===== Estaduais do comércio (LP/Real): ICMS por débito/crédito e FUMACOP (2%) =====
+        // Antecipação Parcial e DIFAL são linhas de valor manual — não recalculadas aqui.
         if (mov) {
             if (t.tax === 'ICMS') {
                 if (mov.icms) {
@@ -377,16 +377,6 @@ export const autoFillTaxes = (data, currentTaxes) => {
                 } else {
                     updated.base = ""; updated.apurado = ""; updated.obs = "Apuração por débito e crédito";
                 }
-            } else if (t.tax === 'Antecipação Parcial') {
-                updated.base = formatBRLDisplay(mov.comprasInter);
-                updated.rate = fmtPct(mov.difAliq);
-                updated.apurado = mov.antecipacao > 0 ? formatBRLDisplay(mov.antecipacao) : "";
-                updated.obs = `Compras interestaduais · ${fmtPct(mov.aliqInterna)}% − ${fmtPct(mov.aliqInter)}%`;
-            } else if (t.tax === 'DIFAL') {
-                updated.base = formatBRLDisplay(mov.baseDifal);
-                updated.rate = fmtPct(mov.difAliq);
-                updated.apurado = mov.difal > 0 ? formatBRLDisplay(mov.difal) : "";
-                updated.obs = `Uso/consumo/ativo · ${fmtPct(mov.aliqInterna)}% − ${fmtPct(mov.aliqInter)}%`;
             } else if (t.tax === 'FUMACOP') {
                 updated.base = formatBRLDisplay(mov.baseFumacop);
                 updated.rate = "2,00";
@@ -435,7 +425,7 @@ export const autoFillTaxes = (data, currentTaxes) => {
         const retido = parseNumBR(updated.retido);
         // Tributos gerenciados pelo motor têm o valor recalculado/limpo; linhas customizadas
         // (nome livre, só "Valor" digitado) preservam o que o usuário digitou
-        const MANAGED = ['PIS', 'COFINS', 'PIS/COFINS', 'ISS', 'IRPJ', 'CSLL', 'Adicional IRPJ', 'CPP', 'CPP (Patronal)', 'RAT', 'RAT (Ajustado)', 'Terceiros', 'FGTS', 'DAS', 'INSS', 'INSS (Sócio)', 'ICMS', 'Antecipação Parcial', 'FUMACOP'];
+        const MANAGED = ['PIS', 'COFINS', 'PIS/COFINS', 'ISS', 'IRPJ', 'CSLL', 'Adicional IRPJ', 'CPP', 'CPP (Patronal)', 'RAT', 'RAT (Ajustado)', 'Terceiros', 'FGTS', 'DAS', 'INSS', 'INSS (Sócio)', 'ICMS', 'FUMACOP'];
         if (apurado > 0 || retido > 0) {
             updated.value = formatBRLDisplay(Math.max(0, apurado - retido));
         } else if (MANAGED.includes(t.tax)) {
